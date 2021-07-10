@@ -28,7 +28,12 @@ function Index(fields, options) {
     };
 }
 exports.Index = Index;
-function Cascade(options = { create: true, update: true, onDelete: 'none' }) {
+function Cascade(options = {
+    create: true,
+    update: true,
+    delete: false,
+    onDelete: 'none',
+}) {
     return function (target, propertyKey) {
         const value = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_CASCADE, target.constructor) || {};
         value[propertyKey] = options;

@@ -24,7 +24,7 @@ export interface Timestamp {
     readonly createdAt?: Date;
     readonly updatedAt?: Date;
 }
-export interface Entity {
+export declare type Entity<E> = E & {
     readonly id?: any;
     readonly _id?: any;
-}
+};

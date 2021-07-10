@@ -119,18 +119,27 @@ function repository(EntityClass, connection) {
                 for (const key in this.$cascade) {
                     const item = this.$cascade[key];
                     if (item.onDelete === 'null') {
-                        this.$events.addListener(`${key}:delete`, (deleted = []) => {
-                            if (deleted.length)
+                        const { isArray, ref } = this.getRef(key);
+                        this.$events.addListener(`${ref}:delete`, (deleted = []) => __awaiter(this, void 0, void 0, function* () {
+                            if (!deleted.length)
                                 return;
-                            this.model.updateMany({
-                                [key]: { $in: deleted.map((e) => e._id) },
-                            }, {
-                                [key]: null,
-                            });
-                        });
+                            const ids = deleted.map((e) => e._id);
+                            return this.model.updateMany({
+                                [key]: { $in: ids },
+                            }, isArray
+                                ? {
+                                    $pullAll: {
+                                        [key]: ids,
+                                    },
+                                }
+                                : {
+                                    [key]: null,
+                                });
+                        }));
                     }
                     if (item.onDelete === 'cascade') {
-                        this.$events.addListener(`${key}:delete`, (deleted = []) => {
+                        const { ref } = this.getRef(key);
+                        this.$events.addListener(`${ref}:delete`, (deleted = []) => {
                             if (deleted.length)
                                 return;
                             this.delete({
@@ -255,6 +264,15 @@ class Reposiory {
     get $events() {
         return Reposiory.events;
     }
+    getRef(key) {
+        var _a, _b, _c, _d, _e;
+        const type = this.schema.path(key);
+        const isArray = type.instance === 'Array';
+        const ref = isArray
+            ? (_c = (_b = (_a = type) === null || _a === void 0 ? void 0 : _a.caster) === null || _b === void 0 ? void 0 : _b.options) === null || _c === void 0 ? void 0 : _c.ref
+            : (_e = (_d = type) === null || _d === void 0 ? void 0 : _d.options) === null || _e === void 0 ? void 0 : _e.ref;
+        return { isArray, ref };
+    }
     onInited() { }
     baseBeforeAll(ctx) {
         ctx.meta = ctx.meta || {};
@@ -264,12 +282,26 @@ class Reposiory {
             for (const key of Object.keys(this.$cascade)) {
                 if (!this.$cascade[key].delete)
                     continue;
-                const refRepository = Reposiory.getRepository(this.connection, `${key}Repository`);
+                const { ref } = this.getRef(key);
+                if (!ref)
+                    continue;
+                const refRepository = Reposiory.getRepository(this.connection, `${ref}Repository`);
                 if (!refRepository)
                     continue;
-                const ids = ctx.meta.deleted
-                    .map((item) => item[key])
-                    .filter((e) => e && mongoose_1.isValidObjectId(e));
+                const ids = [];
+                ctx.meta.deleted.forEach((item) => {
+                    const value = item[key];
+                    if (Array.isArray(value)) {
+                        value.forEach((e) => {
+                            if (e && mongoose_1.isValidObjectId(e)) {
+                                ids.push(e);
+                            }
+                        });
+                    }
+                    else if (value && mongoose_1.isValidObjectId(value)) {
+                        ids.push(value);
+                    }
+                });
                 if (ids.length > 0) {
                     yield refRepository.delete({
                         query: { _id: { $in: ids } },
@@ -360,7 +392,6 @@ class Reposiory {
         });
     }
     cascadeCreate(ctx) {
-        var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function* () {
             const data = ctx.data;
             for (const key of Object.keys(this.$cascade)) {
@@ -371,11 +402,7 @@ class Reposiory {
                     data[key] = null;
                     continue;
                 }
-                const type = this.schema.path(key);
-                const isArray = type.instance === 'Array';
-                const ref = isArray
-                    ? (_c = (_b = (_a = type) === null || _a === void 0 ? void 0 : _a.caster) === null || _b === void 0 ? void 0 : _b.options) === null || _c === void 0 ? void 0 : _c.ref
-                    : (_e = (_d = type) === null || _d === void 0 ? void 0 : _d.options) === null || _e === void 0 ? void 0 : _e.ref;
+                const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
                 const refRepository = Reposiory.getRepository(this.connection, ref + 'Repository');
@@ -446,6 +473,7 @@ class Reposiory {
                     data[key] = doc._id;
                 }
             }
+            // End cascade
         });
     }
     create(ctx) {
@@ -530,7 +558,6 @@ class Reposiory {
         });
     }
     cascadeUpdate(ctx) {
-        var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function* () {
             const data = ctx.data;
             for (const key of Object.keys(this.$cascade)) {
@@ -541,11 +568,7 @@ class Reposiory {
                     data[key] = null;
                     continue;
                 }
-                const type = this.schema.path(key);
-                const isArray = type.instance === 'Array';
-                const ref = isArray
-                    ? (_c = (_b = (_a = type) === null || _a === void 0 ? void 0 : _a.caster) === null || _b === void 0 ? void 0 : _b.options) === null || _c === void 0 ? void 0 : _c.ref
-                    : (_e = (_d = type) === null || _d === void 0 ? void 0 : _d.options) === null || _e === void 0 ? void 0 : _e.ref;
+                const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
                 const refRepository = Reposiory.getRepository(this.connection, ref + 'Repository');

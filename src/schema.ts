@@ -54,7 +54,12 @@ export interface CascadeOptions {
 }
 
 export function Cascade(
-  options: CascadeOptions = { create: true, update: true, onDelete: 'none' }
+  options: CascadeOptions = {
+    create: true,
+    update: true,
+    delete: false,
+    onDelete: 'none',
+  }
 ) {
   return function (target: any, propertyKey: string) {
     const value =

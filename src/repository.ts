@@ -112,21 +112,33 @@ export function repository(EntityClass: any, connection?: Connection) {
         for (const key in this.$cascade) {
           const item = this.$cascade[key]
           if (item.onDelete === 'null') {
-            this.$events.addListener(`${key}:delete`, (deleted: any[] = []) => {
-              if (deleted.length) return
-              this.model.updateMany(
-                {
-                  [key]: { $in: deleted.map((e) => e._id) },
-                },
-                {
-                  [key]: null,
-                }
-              )
-            })
+            const { isArray, ref } = this.getRef(key)
+            this.$events.addListener(
+              `${ref}:delete`,
+              async (deleted: any[] = []) => {
+                if (!deleted.length) return
+                const ids = deleted.map((e) => e._id)
+                return this.model.updateMany(
+                  {
+                    [key]: { $in: ids },
+                  },
+                  isArray
+                    ? {
+                        $pullAll: {
+                          [key]: ids,
+                        },
+                      }
+                    : {
+                        [key]: null,
+                      }
+                )
+              }
+            )
           }
 
           if (item.onDelete === 'cascade') {
-            this.$events.addListener(`${key}:delete`, (deleted: any[] = []) => {
+            const { ref } = this.getRef(key)
+            this.$events.addListener(`${ref}:delete`, (deleted: any[] = []) => {
               if (deleted.length) return
               this.delete({
                 query: {
@@ -348,6 +360,15 @@ export class Reposiory<E = any> {
     if (connection) this.connection = connection
   }
 
+  getRef(key: string) {
+    const type = this.schema.path(key)
+    const isArray = (type as any).instance === 'Array'
+    const ref = isArray
+      ? (type as any)?.caster?.options?.ref
+      : (type as any)?.options?.ref
+    return { isArray, ref }
+  }
+
   onInited() {}
 
   @Before(/.*/)
@@ -359,22 +380,29 @@ export class Reposiory<E = any> {
   async baseAfterDelete(ctx: ContextDelete<E>, rs: any) {
     for (const key of Object.keys(this.$cascade)) {
       if (!this.$cascade[key].delete) continue
+
+      const { ref } = this.getRef(key)
+
+      if (!ref) continue
+
       const refRepository = Reposiory.getRepository(
         this.connection,
-        `${key}Repository`
+        `${ref}Repository`
       )
       if (!refRepository) continue
 
       const ids: any[] = []
+
       ctx.meta.deleted.forEach((item: any) => {
-        if (Array.isArray(item)) {
-          item.forEach((e: any) => {
+        const value = item[key]
+        if (Array.isArray(value)) {
+          value.forEach((e: any) => {
             if (e && isValidObjectId(e)) {
               ids.push(e)
             }
           })
-        } else if (item && isValidObjectId(item)) {
-          ids.push(item)
+        } else if (value && isValidObjectId(value)) {
+          ids.push(value)
         }
       })
 
@@ -534,11 +562,7 @@ export class Reposiory<E = any> {
         continue
       }
 
-      const type = this.schema.path(key)
-      const isArray = (type as any).instance === 'Array'
-      const ref = isArray
-        ? (type as any)?.caster?.options?.ref
-        : (type as any)?.options?.ref
+      const { isArray, ref } = this.getRef(key)
 
       if (!ref) continue
 
@@ -739,11 +763,7 @@ export class Reposiory<E = any> {
         continue
       }
 
-      const type = this.schema.path(key)
-      const isArray = (type as any).instance === 'Array'
-      const ref = isArray
-        ? (type as any)?.caster?.options?.ref
-        : (type as any)?.options?.ref
+      const { isArray, ref } = this.getRef(key)
 
       if (!ref) continue
 

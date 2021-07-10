@@ -11,6 +11,10 @@ export declare function repository(EntityClass: any, connection?: Connection): <
         schema: Schema<any, Model<any, any, any>, undefined, any>;
         connection: Connection;
         readonly $events: EventEmmit;
+        getRef(key: string): {
+            isArray: boolean;
+            ref: any;
+        };
         onInited(): void;
         baseBeforeAll(ctx: Context<{}>): void;
         baseAfterDelete(ctx: ContextDelete<any, {}>, rs: any): Promise<any>;
@@ -155,6 +159,10 @@ export declare class Reposiory<E = any> {
     static registerRepository(connection: Connection, repository: Reposiory): boolean;
     get $events(): EventEmmit;
     constructor(connection?: Connection);
+    getRef(key: string): {
+        isArray: boolean;
+        ref: any;
+    };
     onInited(): void;
     baseBeforeAll(ctx: Context): void;
     baseAfterDelete(ctx: ContextDelete<E>, rs: any): Promise<any>;

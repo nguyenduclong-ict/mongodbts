@@ -26,7 +26,7 @@ export class Post implements Timestamp {
   comments?: Comment[]
 
   @Field({ type: SchemaTypes.ObjectId, ref: 'User' })
-  @Cascade()
+  @Cascade({ create: true, update: true, delete: true, onDelete: 'null' })
   user?: User
 
   readonly createdAt?: Date

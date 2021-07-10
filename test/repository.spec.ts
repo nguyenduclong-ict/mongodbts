@@ -523,12 +523,32 @@ describe('Repository', () => {
           username: 'delete cascade',
         },
       },
+      populates: ['user'],
     })
 
     await postRepository.deleteOne({ query: { _id: post._id } })
 
     expect(
-      await userRepository.findOne({ query: { _id: post.user.id } })
+      await userRepository.findOne({ query: { _id: post.user._id } })
+    ).toBeNull()
+  })
+
+  it('cascade when reference delete:[set null]', async () => {
+    const post = await postRepository.create({
+      data: {
+        title: 'delete cascade',
+        content: 'delete cascade',
+        user: {
+          name: 'delete cascade',
+          username: 'delete cascade',
+        },
+      },
+      populates: ['user'],
+    })
+
+    await userRepository.deleteOne({ query: { _id: post.user._id } })
+    expect(
+      (await postRepository.findOne({ query: { _id: post._id } })).user
     ).toBeNull()
   })
 })
