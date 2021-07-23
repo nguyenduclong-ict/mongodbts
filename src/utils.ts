@@ -1,7 +1,12 @@
-import { ConnectOptions, createConnection } from 'mongoose'
 import 'reflect-metadata'
+import { ConnectOptions, createConnection } from 'mongoose'
 import { CascadeOptions } from 'schema'
 import { KEYS } from './constants'
+import get from 'lodash/get'
+import set from 'lodash/set'
+import pick from 'lodash/pick'
+
+export { get, set, pick }
 
 export function createMongoConnection(uri: string, options?: ConnectOptions) {
   const connection = createConnection(uri || 'mongodb://localhost:27017', {
@@ -102,3 +107,17 @@ export function getCascades(target: any) {
 
   return result
 }
+
+// mongoid
+// -------
+export const toMongoId = (value: any) => {
+  if (!value) return null
+  if (typeof value === 'string') return value
+  if (typeof value === 'object') {
+    if (value.constructor.name === 'ObjectID') return value.toHexString()
+    return value._id || value.id
+  }
+}
+
+export const idIsEqual = (val1: any, val2: any) =>
+  toMongoId(val1) === toMongoId(val2)

@@ -3,7 +3,7 @@ import {
   Cascade,
   Entity,
   Field,
-  Reposiory,
+  Repository,
   repository,
   Timestamp,
 } from '../../src'
@@ -34,4 +34,4 @@ export class Post implements Timestamp {
 }
 
 @repository(Post)
-export class PostRepository extends Reposiory<Post> {}
+export class PostRepository extends Repository<Post> {}

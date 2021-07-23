@@ -48,3 +48,36 @@ export class UserRepository extends Reposiory<User> {
   }
 }
 ```
+
+## Actions
+
+### - create (ctx: ContextCreate\<E>): Promise\<E\>
+
+```typescript
+interface ContextCreate<E = any, M = { cascadeContext?: CascadeContext }>
+  extends Context<M> {
+  // Query for check existed, if set then check entity existed with query before
+  // If Exist throw error
+  query?: FilterQuery<E>
+  data: E
+  session?: any
+  safe?: boolean
+  populates?: (keyof E)[] | Array<PopulateOptions>
+}
+```
+
+### - createMany (ctx: ContextCreate\<E>): Promise\<E[]\>
+
+```typescript
+interface ContextCreateMany<E = any, M = { cascadeContext?: CascadeContext }>
+  extends Context<M>,
+    ContextOptions<E> {
+  // Query for check existed, if set then check entity existed with query before
+  // If Exist throw error
+  query?: FilterQuery<E>
+  data: E[]
+  safe?: boolean
+  session?: any
+  populates?: (keyof E)[] | Array<PopulateOptions>
+}
+```

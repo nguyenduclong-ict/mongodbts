@@ -21,19 +21,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Reposiory = exports.Action = exports.After = exports.Before = exports.repository = void 0;
+exports.Repository = exports.Rollback = exports.Action = exports.After = exports.Before = exports.repository = void 0;
+const class_transformer_1 = require("class-transformer");
+const class_validator_1 = require("class-validator");
+const events_1 = __importDefault(require("events"));
+const lodash_1 = require("lodash");
 const mongoose_1 = require("mongoose");
-const mongodb_1 = require("mongodb");
 const constants_1 = require("./constants");
 const schema_1 = require("./schema");
 const utils_1 = require("./utils");
-const events_1 = __importDefault(require("events"));
 // @ts-ignore
 function repository(EntityClass, connection) {
     return function (constructor) {
         return class extends constructor {
             constructor(...args) {
                 super(...args);
+                this.entityCls = EntityClass;
                 this.name = constructor.name;
                 const actions = utils_1.getActions(constructor);
                 const cascade = utils_1.getCascades(EntityClass);
@@ -41,8 +44,8 @@ function repository(EntityClass, connection) {
                 const after = utils_1.getHooks(constants_1.KEYS.REPOSITORY_AFTER, constructor);
                 this.$before = this.$before || {};
                 this.$after = this.$after || {};
-                Object.keys(Reposiory.global.before).forEach((key) => {
-                    const handlers = Reposiory.global.before[key];
+                Object.keys(Repository.global.before).forEach((key) => {
+                    const handlers = Repository.global.before[key];
                     if (key.startsWith('/') && key.endsWith('/')) {
                         // is regex
                         const rg = new RegExp(key.slice(1, key.length - 1));
@@ -89,8 +92,8 @@ function repository(EntityClass, connection) {
                         this.$after[key].push(...handlers);
                     }
                 });
-                Object.keys(Reposiory.global.after).forEach((key) => {
-                    const handlers = Reposiory.global.after[key];
+                Object.keys(Repository.global.after).forEach((key) => {
+                    const handlers = Repository.global.after[key];
                     if (key.startsWith('/') && key.endsWith('/')) {
                         // is regex
                         const rg = new RegExp(key.slice(1, key.length - 1));
@@ -111,7 +114,7 @@ function repository(EntityClass, connection) {
                     this.connection.models[EntityClass.name] ||
                         this.connection.model(EntityClass.name, this.schema);
                 this.$cascade = cascade;
-                Reposiory.registerRepository(this.connection, this);
+                Repository.registerRepository(this.connection, this);
                 this.baseOnInited();
                 this.onInited();
             }
@@ -221,9 +224,45 @@ function Action() {
 }
 exports.Action = Action;
 /**
+ * Rollback
+ */
+class Rollback {
+    constructor(options = {}) {
+        this.actions = [];
+        this.rollbacked = false;
+        this.error = null;
+        this.results = [];
+        Object.assign(this, options);
+    }
+    add(action) {
+        this.actions.push(action);
+    }
+    run() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this.rollbacked)
+                return false;
+            const start = this.error && this.errorIndex >= 0 ? this.errorIndex : 0;
+            for (let index = start; index < this.actions.length; index++) {
+                const action = this.actions[index];
+                try {
+                    this.results.push(yield action());
+                }
+                catch (error) {
+                    this.errorIndex = error;
+                    this.error = error;
+                    throw error;
+                }
+            }
+            this.rollbacked = true;
+            return this.results.length === this.actions.length;
+        });
+    }
+}
+exports.Rollback = Rollback;
+/**
  * Repository
  */
-class Reposiory {
+class Repository {
     constructor(connection) {
         this.$before = {};
         this.$after = {};
@@ -262,7 +301,7 @@ class Reposiory {
         return true;
     }
     get $events() {
-        return Reposiory.events;
+        return Repository.events;
     }
     getRef(key) {
         var _a, _b, _c, _d, _e;
@@ -276,16 +315,21 @@ class Reposiory {
     onInited() { }
     baseBeforeAll(ctx) {
         ctx.meta = ctx.meta || {};
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'cascade')) {
+            ctx.cascade = true;
+        }
     }
     baseAfterDelete(ctx, rs) {
         return __awaiter(this, void 0, void 0, function* () {
+            if (!ctx.cascade)
+                return rs;
             for (const key of Object.keys(this.$cascade)) {
                 if (!this.$cascade[key].delete)
                     continue;
                 const { ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Reposiory.getRepository(this.connection, `${ref}Repository`);
+                const refRepository = Repository.getRepository(this.connection, `${ref}Repository`);
                 if (!refRepository)
                     continue;
                 const ids = [];
@@ -322,15 +366,19 @@ class Reposiory {
     onCreateSchema(schema) {
         return schema;
     }
+    getQueryProject(fields) {
+        if (Array.isArray(fields)) {
+            fields.reduce((val, field) => {
+                val[field] = field.startsWith('-') ? 0 : 1;
+                return val;
+            }, {});
+        }
+        return fields;
+    }
     // Repository base actions
     findOne(ctx = {}) {
-        const project = ctx.project || ctx.fields
-            ? ctx.fields.reduce((val, field) => {
-                val[field] = 1;
-                return val;
-            }, {})
-            : undefined;
-        const queryBuilder = this.model.findOne(ctx.query, project, this.getBaseOptionFromContext(ctx));
+        const project = this.getQueryProject(ctx.project || ctx.fields);
+        const queryBuilder = this.model.findOne(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields']));
         if (ctx.populates) {
             for (const item of ctx.populates) {
                 queryBuilder.populate(item);
@@ -339,13 +387,8 @@ class Reposiory {
         return queryBuilder.exec();
     }
     find(ctx = {}) {
-        const project = ctx.project || ctx.fields
-            ? ctx.fields.reduce((val, field) => {
-                val[field] = 1;
-                return val;
-            }, {})
-            : undefined;
-        const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(Object.assign(Object.assign({}, ctx), { limit: ctx.limit, skip: ctx.skip, sort: ctx.sort })));
+        const project = this.getQueryProject(ctx.project || ctx.fields);
+        const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(Object.assign(Object.assign({}, ctx), { limit: ctx.limit, skip: ctx.skip, sort: ctx.sort }), ['fields']));
         if (ctx.populates) {
             for (const item of ctx.populates) {
                 queryBuilder.populate(item);
@@ -355,12 +398,7 @@ class Reposiory {
     }
     list(ctx = {}) {
         return __awaiter(this, void 0, void 0, function* () {
-            const project = ctx.project || ctx.fields
-                ? ctx.fields.reduce((val, field) => {
-                    val[field] = 1;
-                    return val;
-                }, {})
-                : undefined;
+            const project = this.getQueryProject(ctx.project || ctx.fields);
             const limit = Number.isInteger(ctx.pageSize)
                 ? ctx.pageSize
                 : Number.isInteger(ctx.limit)
@@ -372,7 +410,7 @@ class Reposiory {
                     ? ctx.skip
                     : 0;
             const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(Object.assign(Object.assign({}, ctx), { limit,
-                skip, sort: ctx.sort })));
+                skip, sort: ctx.sort }), ['fields']));
             if (ctx.populates) {
                 for (const item of ctx.populates) {
                     queryBuilder.populate(item);
@@ -380,7 +418,7 @@ class Reposiory {
             }
             const [docs, count] = yield Promise.all([
                 queryBuilder.exec(),
-                queryBuilder.countDocuments(),
+                this.model.find().merge(queryBuilder).countDocuments(),
             ]);
             return {
                 data: docs,
@@ -405,7 +443,7 @@ class Reposiory {
                 const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Reposiory.getRepository(this.connection, ref + 'Repository');
+                const refRepository = Repository.getRepository(this.connection, ref + 'Repository');
                 if (!refRepository)
                     continue;
                 if (isArray) {
@@ -423,23 +461,18 @@ class Reposiory {
                             arr[index] = item;
                             continue;
                         }
-                        if (item.id) {
+                        if (item.id && mongoose_1.isValidObjectId(item.id)) {
                             arr[index] = item.id;
                             continue;
                         }
-                        if (item._id) {
+                        if (item._id && mongoose_1.isValidObjectId(item._id)) {
                             arr[index] = item._id;
                             continue;
                         }
-                        const doc = yield refRepository.create(utils_1.omitBy({
-                            data: item,
-                            meta: {
+                        const doc = yield refRepository.create(utils_1.omitBy(Object.assign({ data: item, meta: {
                                 skipHook: true,
-                                cascadeContext: ctx.meta.cascadeContext,
-                            },
-                            session: ctx.session,
-                        }, [null, undefined]));
-                        ctx.meta.cascadeContext.rollbacks.push(() => {
+                            }, session: ctx.session }, this.getCascadeContext(ctx)), [null, undefined]));
+                        ctx.rollback.add(() => {
                             data[key] = value;
                             return refRepository.model.deleteOne({ _id: doc._id });
                         });
@@ -458,37 +491,30 @@ class Reposiory {
                         data[key] = value._id;
                         continue;
                     }
-                    const doc = yield refRepository.create(utils_1.omitBy({
-                        data: value,
-                        meta: {
+                    const doc = yield refRepository.create(utils_1.omitBy(Object.assign(Object.assign({ data: value, meta: {
                             skipHook: true,
-                            cascadeContext: ctx.meta.cascadeContext,
-                        },
-                        session: ctx.session,
-                    }, [null, undefined]));
-                    ctx.meta.cascadeContext.rollbacks.push(() => {
+                        } }, this.getCascadeContext(ctx)), { session: ctx.session }), [null, undefined]));
+                    ctx.rollback.add(() => {
                         data[key] = value;
                         return refRepository.model.deleteOne({ _id: doc._id });
                     });
                     data[key] = doc._id;
                 }
             }
-            // End cascade
+            // End cascade create
         });
     }
     create(ctx) {
-        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            // Cascade create
-            const isExcecRollback = !((_a = ctx.meta) === null || _a === void 0 ? void 0 : _a.cascadeContext);
-            if (!ctx.meta.cascadeContext) {
-                ctx.meta.cascadeContext = {
-                    rollbacked: false,
-                    rollbacks: [],
-                };
+            if (ctx.query) {
+                const exist = yield this.model.exists(ctx.query);
+                if (exist)
+                    throw new Error('Entity existed');
             }
             try {
-                yield this.cascadeCreate(ctx);
+                // check cascade
+                if (this.getCascadeContext(ctx))
+                    yield this.cascadeCreate(ctx);
                 const entity = new this.model(ctx.data);
                 yield entity.save(this.getBaseOptionFromContext(ctx));
                 if (ctx.populates) {
@@ -505,30 +531,30 @@ class Reposiory {
                 }
             }
             catch (error) {
-                if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-                    yield Promise.all(ctx.meta.cascadeContext.rollbacks.map((e) => e()));
-                    ctx.meta.cascadeContext.rollbacked = true;
+                if (this.getCascadeContext(ctx) && ctx.execRollback) {
+                    yield ctx.rollback.run();
                 }
                 throw error;
             }
         });
     }
     createMany(ctx) {
-        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            // Cascade createMany
-            const isExcecRollback = !((_a = ctx.meta) === null || _a === void 0 ? void 0 : _a.cascadeContext);
-            if (!ctx.meta.cascadeContext) {
-                ctx.meta.cascadeContext = {
-                    rollbacked: false,
-                    rollbacks: [],
-                };
+            if (ctx.query) {
+                const exist = yield this.model.exists(ctx.query);
+                if (exist)
+                    throw new Error('Entity existed');
             }
+            // Cascade createMany
             try {
-                for (const item of ctx.data) {
-                    if (!item)
-                        continue;
-                    yield this.cascadeCreate(Object.assign(Object.assign({}, ctx), { data: item }));
+                if (this.getCascadeContext(ctx)) {
+                    for (const item of ctx.data) {
+                        if (!item)
+                            continue;
+                        if (ctx.cascade) {
+                            yield this.cascadeCreate(Object.assign(Object.assign({}, ctx), { execRollback: false, data: item }));
+                        }
+                    }
                 }
                 const docs = yield this.model.insertMany(ctx.data, utils_1.omitBy({
                     session: ctx.session,
@@ -549,9 +575,8 @@ class Reposiory {
                 }
             }
             catch (error) {
-                if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-                    yield Promise.all(ctx.meta.cascadeContext.rollbacks.map((e) => e()));
-                    ctx.meta.cascadeContext.rollbacked = true;
+                if (this.getCascadeContext(ctx) && ctx.execRollback) {
+                    yield ctx.rollback.run();
                 }
                 throw error;
             }
@@ -571,135 +596,124 @@ class Reposiory {
                 const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Reposiory.getRepository(this.connection, ref + 'Repository');
+                const refRepository = Repository.getRepository(this.connection, ref + 'Repository');
                 if (!refRepository)
                     continue;
+                const updater = {};
                 if (isArray) {
-                    if (!Array.isArray(value)) {
-                        throw new Error(`${key} must be array`);
-                    }
-                    const arr = [];
-                    for (let index = 0; index < value.length; index++) {
-                        const item = value[index];
-                        if (!item) {
-                            arr[index] = null;
-                            continue;
-                        }
+                    const newDatas = Array.isArray(value) ? value : [value];
+                    for (let index = 0; index < newDatas.length; index++) {
+                        const item = newDatas[index];
+                        // create or update item
                         if (mongoose_1.isValidObjectId(item)) {
-                            arr[index] = item;
-                            continue;
+                            lodash_1.set(updater, `${key}.${index}`, item || null);
                         }
-                        const id = item._id || item.id;
-                        let oldValue;
-                        if (id) {
-                            oldValue = yield refRepository.model.findOne({ _id: id });
-                        }
-                        const doc = yield refRepository.updateOne({
-                            query: {
-                                _id: id || new mongodb_1.ObjectId(),
-                            },
-                            data: item,
-                            meta: {
-                                skipHook: true,
-                                cascadeContext: ctx.meta.cascadeContext,
-                            },
-                            session: ctx.session,
-                            upsert: true,
-                        });
-                        ctx.meta.cascadeContext.rollbacks.push(() => {
-                            data[key] = value;
-                            if (id && oldValue) {
-                                return refRepository.model.updateOne({ _id: id }, oldValue);
-                            }
-                            else {
-                                return refRepository.model.deleteOne({ _id: doc._id });
-                            }
-                        });
-                        arr[index] = doc._id;
-                    }
-                    data[key] = arr;
-                }
-                else {
-                    if (mongoose_1.isValidObjectId(value))
-                        continue;
-                    const id = value._id || value.id;
-                    let oldValue;
-                    if (id) {
-                        oldValue = yield refRepository.model.findOne({ _id: id });
-                    }
-                    const doc = yield refRepository.updateOne({
-                        query: { _id: id || new mongodb_1.ObjectId() },
-                        data: value,
-                        meta: {
-                            skipHook: true,
-                            cascadeContext: ctx.meta.cascadeContext,
-                        },
-                        session: ctx.session,
-                        upsert: true,
-                    });
-                    ctx.meta.cascadeContext.rollbacks.push(() => {
-                        data[key] = value;
-                        if (id && oldValue) {
-                            return refRepository.model.updateOne({ _id: id }, oldValue);
+                        if (typeof item === 'object' &&
+                            utils_1.toMongoId(item) &&
+                            mongoose_1.isValidObjectId(utils_1.toMongoId(item))) {
+                            // update
+                            const oldValue = yield refRepository.model.findOne({
+                                _id: utils_1.toMongoId(item),
+                            });
+                            const doc = yield refRepository.updateOne(utils_1.omitBy(Object.assign(Object.assign({ query: { _id: utils_1.toMongoId(item) }, data: lodash_1.omit(item, 'id', '_id'), meta: {
+                                    skipHook: true,
+                                } }, this.getCascadeContext(ctx)), { session: ctx.session }), [undefined, null]));
+                            ctx.rollback.add(() => {
+                                return refRepository.model.updateOne({ _id: utils_1.toMongoId(item) }, oldValue);
+                            });
+                            lodash_1.set(updater, `${key}.[${index}]`, utils_1.toMongoId(item));
                         }
                         else {
-                            return refRepository.model.deleteOne({ _id: doc._id });
+                            // create
+                            const doc = yield refRepository.create(utils_1.omitBy(Object.assign(Object.assign({ data: item, meta: {
+                                    skipHook: true,
+                                } }, this.getCascadeContext(ctx)), { session: ctx.session }), [undefined, null]));
+                            ctx.rollback.add(() => refRepository.model.deleteOne({ _id: utils_1.toMongoId(doc) }));
+                            lodash_1.set(updater, `${key}.[${index}]`, utils_1.toMongoId(doc));
                         }
-                    });
-                    data[key] = doc._id;
+                    }
                 }
+                else {
+                    const item = Array.isArray(value) ? value[0] : value;
+                    if (mongoose_1.isValidObjectId(item)) {
+                        lodash_1.set(updater, `${key}`, item || null);
+                    }
+                    if (typeof item === 'object' &&
+                        utils_1.toMongoId(item) &&
+                        mongoose_1.isValidObjectId(utils_1.toMongoId(item))) {
+                        const oldValue = yield refRepository.model.findOne({
+                            _id: utils_1.toMongoId(item),
+                        });
+                        // update
+                        yield refRepository.updateOne(utils_1.omitBy(Object.assign(Object.assign({ query: { id: utils_1.toMongoId(item) }, data: lodash_1.omit(item, 'id', '_id'), meta: {
+                                skipHook: true,
+                            } }, this.getCascadeContext(ctx)), { session: ctx.session }), [undefined, null]));
+                        ctx.rollback.add(() => refRepository.model.updateOne({ _id: utils_1.toMongoId(item) }, oldValue));
+                        lodash_1.set(updater, `${key}`, utils_1.toMongoId(item));
+                    }
+                    else {
+                        // create
+                        const doc = yield refRepository.create(utils_1.omitBy(Object.assign(Object.assign({ data: item, meta: {
+                                skipHook: true,
+                            } }, this.getCascadeContext(ctx)), { session: ctx.session }), [undefined, null]));
+                        ctx.rollback.add(() => refRepository.model.deleteOne({ _id: utils_1.toMongoId(doc) }));
+                        lodash_1.set(updater, `${key}`, utils_1.toMongoId(doc));
+                    }
+                }
+                lodash_1.unset(data, key);
+                if (data.$set)
+                    Object.assign(data.$set, updater);
+                else
+                    data.$set = updater;
             }
         });
     }
     update(ctx) {
-        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            const isExcecRollback = !((_a = ctx.meta) === null || _a === void 0 ? void 0 : _a.cascadeContext);
-            if (!ctx.meta.cascadeContext) {
-                ctx.meta.cascadeContext = {
-                    rollbacked: false,
-                    rollbacks: [],
-                };
-            }
             try {
-                yield this.cascadeUpdate(ctx);
+                if (this.getCascadeContext(ctx))
+                    yield this.cascadeUpdate(ctx);
                 return this.model
                     .updateMany(ctx.query, ctx.data, this.getBaseOptionFromContext(ctx))
                     .then(() => this.find(Object.assign(Object.assign({}, ctx), { meta: Object.assign(Object.assign({}, ctx.meta), { skipHook: true }) })));
             }
             catch (error) {
-                if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-                    yield Promise.all(ctx.meta.cascadeContext.rollbacks.map((e) => e()));
-                    ctx.meta.cascadeContext.rollbacked = true;
+                if (this.getCascadeContext(ctx) && ctx.execRollback) {
+                    yield ctx.rollback.run();
                 }
                 throw error;
             }
         });
     }
     updateOne(ctx) {
-        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            const isExcecRollback = !((_a = ctx.meta) === null || _a === void 0 ? void 0 : _a.cascadeContext);
-            if (!ctx.meta.cascadeContext) {
-                ctx.meta.cascadeContext = {
-                    rollbacked: false,
-                    rollbacks: [],
-                };
-            }
             try {
-                yield this.cascadeUpdate(ctx);
+                if (this.getCascadeContext(ctx))
+                    yield this.cascadeUpdate(ctx);
                 return this.model
                     .updateOne(ctx.query, ctx.data, this.getBaseOptionFromContext(ctx))
                     .then(() => this.findOne(Object.assign(Object.assign({}, ctx), { meta: Object.assign(Object.assign({}, ctx.meta), { skipHook: true }) })));
             }
             catch (error) {
-                if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-                    yield Promise.all(ctx.meta.cascadeContext.rollbacks.map((e) => e()));
-                    ctx.meta.cascadeContext.rollbacked = true;
+                if (this.getCascadeContext(ctx) && ctx.execRollback) {
+                    yield ctx.rollback.run();
                 }
                 throw error;
             }
         });
+    }
+    getCascadeContext(ctx) {
+        if (!ctx.cascade)
+            return null;
+        if (!ctx.rollback) {
+            ctx.rollback = new Rollback();
+            ctx.execRollback = true;
+        }
+        return {
+            cascade: ctx.cascade,
+            rollback: ctx.rollback,
+            execRollback: ctx.execRollback,
+        };
     }
     delete(ctx) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -717,102 +731,106 @@ class Reposiory {
                 .then((rs) => rs.deletedCount);
         });
     }
-    getBaseOptionFromContext(ctx) {
-        const { fields, limit, skip, sort, populates, project, session, safe, upsert, } = ctx;
-        const options = {
-            fields,
-            limit,
-            skip,
-            sort,
-            populates,
-            project,
-            session,
-            safe,
-            upsert,
-        };
+    getBaseOptionFromContext(ctx, excludes = []) {
+        const fields = [
+            'fields',
+            'limit',
+            'skip',
+            'sort',
+            'populates',
+            'project',
+            'session',
+            'safe',
+            'upsert',
+        ].filter((fields) => !excludes.includes(fields));
+        const options = utils_1.pick(ctx, ...fields);
         const value = utils_1.omitBy(options, [undefined, null]);
         if (!Object.keys(value).length) {
             return undefined;
         }
         return value;
     }
+    validate(data) {
+        const entity = class_transformer_1.plainToClass(this.entityCls, data);
+        return class_validator_1.validate(entity);
+    }
 }
-Reposiory.global = {
+Repository.global = {
     before: {},
     after: {},
 };
-Reposiory.events = new events_1.default();
-Reposiory.repositories = new Map();
+Repository.events = new events_1.default();
+Repository.repositories = new Map();
 __decorate([
     Before(/.*/),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
-], Reposiory.prototype, "baseBeforeAll", null);
+], Repository.prototype, "baseBeforeAll", null);
 __decorate([
     After('delete', 'deleteOne'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "baseAfterDelete", null);
+], Repository.prototype, "baseAfterDelete", null);
 __decorate([
     Before('list', 'find', 'findOne', 'delete', 'deleteOne', 'update', 'updateOne'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
-], Reposiory.prototype, "beforeBaseAction", null);
+], Repository.prototype, "beforeBaseAction", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
-], Reposiory.prototype, "findOne", null);
+], Repository.prototype, "findOne", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
-], Reposiory.prototype, "find", null);
+], Repository.prototype, "find", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "list", null);
+], Repository.prototype, "list", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "create", null);
+], Repository.prototype, "create", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "createMany", null);
+], Repository.prototype, "createMany", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "update", null);
+], Repository.prototype, "update", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "updateOne", null);
+], Repository.prototype, "updateOne", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "delete", null);
+], Repository.prototype, "delete", null);
 __decorate([
     Action(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], Reposiory.prototype, "deleteOne", null);
-exports.Reposiory = Reposiory;
+], Repository.prototype, "deleteOne", null);
+exports.Repository = Repository;

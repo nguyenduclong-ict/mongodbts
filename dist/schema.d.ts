@@ -1,11 +1,13 @@
-import { Schema, SchemaDefinition, SchemaOptions } from 'mongoose';
-import 'reflect-metadata';
+import { Schema, SchemaDefinitionProperty, SchemaOptions } from 'mongoose';
 export declare function Entity(options?: SchemaOptions): (constructor: any) => void;
-export declare function Field(fieldDefinition: SchemaDefinition[''] | {
-    type: any;
-}): (target: any, propertyKey: string) => void;
+export declare type FieldType = SchemaDefinitionProperty<any> & {
+    type?: any;
+    default?: any;
+    addValidate?: boolean;
+};
+export declare function Field(field: FieldType): PropertyDecorator;
 export declare function Index<E = any>(fields: {
-    [K in keyof E]: 0 | 1;
+    [K in keyof E]?: 0 | 1;
 }, options?: any): (constructor: any) => void;
 export interface CascadeOptions {
     create?: boolean;

@@ -1,8 +1,9 @@
+import { SchemaType, SchemaTypes } from 'mongoose'
 import {
   Entity,
   Field,
   Index,
-  Reposiory,
+  Repository,
   repository,
   Timestamp,
 } from '../../src'
@@ -13,10 +14,10 @@ export class Comment implements Timestamp {
   id?: any
   _id?: any
 
-  @Field({ type: String })
+  @Field({ type: String, unique: true })
   commentId: string
 
-  @Field(String)
+  @Field(SchemaTypes.Mixed)
   content: string
 
   readonly createdAt?: Date
@@ -24,4 +25,4 @@ export class Comment implements Timestamp {
 }
 
 @repository(Comment)
-export class CommentRepository extends Reposiory<Comment> {}
+export class CommentRepository extends Repository<Comment> {}

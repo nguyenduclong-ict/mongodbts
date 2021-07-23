@@ -1,4 +1,10 @@
+import { plainToClass } from 'class-transformer'
+import { validate } from 'class-validator'
+import EventEmmit from 'events'
+import { omit, set, unset } from 'lodash'
+import { ObjectId } from 'mongodb'
 import {
+  AnyObject,
   Connection,
   connection as defaultConnection,
   FilterQuery,
@@ -8,21 +14,29 @@ import {
   Schema,
   UpdateQuery,
 } from 'mongoose'
-import { ObjectId } from 'mongodb'
 import { KEYS } from './constants'
 import { CascadeOptions, createSchema } from './schema'
-import { getActions, getCascades, getHooks, omitBy } from './utils'
-import EventEmmit from 'events'
+import {
+  getActions,
+  getCascades,
+  getHooks,
+  omitBy,
+  pick,
+  toMongoId,
+} from './utils'
 
 // <==== decorators
 type Constructor<T = {}> = new (...args: any[]) => T
 
 // @ts-ignore
 export function repository(EntityClass: any, connection?: Connection) {
-  return function <T extends Constructor<Reposiory>>(constructor: T) {
+  return function <T extends Constructor<Repository<typeof EntityClass>>>(
+    constructor: T
+  ) {
     return class extends constructor {
       constructor(...args: any[]) {
         super(...args)
+        this.entityCls = EntityClass
         this.name = constructor.name
         const actions: string[] = getActions(constructor)
         const cascade = getCascades(EntityClass)
@@ -32,8 +46,8 @@ export function repository(EntityClass: any, connection?: Connection) {
         this.$before = this.$before || {}
         this.$after = this.$after || {}
 
-        Object.keys(Reposiory.global.before).forEach((key) => {
-          const handlers = Reposiory.global.before[key]
+        Object.keys(Repository.global.before).forEach((key) => {
+          const handlers = Repository.global.before[key]
           if (key.startsWith('/') && key.endsWith('/')) {
             // is regex
             const rg = new RegExp(key.slice(1, key.length - 1))
@@ -80,8 +94,8 @@ export function repository(EntityClass: any, connection?: Connection) {
           }
         })
 
-        Object.keys(Reposiory.global.after).forEach((key) => {
-          const handlers = Reposiory.global.after[key]
+        Object.keys(Repository.global.after).forEach((key) => {
+          const handlers = Repository.global.after[key]
           if (key.startsWith('/') && key.endsWith('/')) {
             // is regex
             const rg = new RegExp(key.slice(1, key.length - 1))
@@ -103,7 +117,7 @@ export function repository(EntityClass: any, connection?: Connection) {
           this.connection.model(EntityClass.name, this.schema)
         this.$cascade = cascade
 
-        Reposiory.registerRepository(this.connection, this)
+        Repository.registerRepository(this.connection, this)
         this.baseOnInited()
         this.onInited()
       }
@@ -157,7 +171,7 @@ export function repository(EntityClass: any, connection?: Connection) {
 }
 
 export function Before(...actions: any[]) {
-  return function (target: Reposiory, propertyKey: string) {
+  return function (target: Repository, propertyKey: string) {
     const value =
       Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
 
@@ -171,7 +185,7 @@ export function Before(...actions: any[]) {
 }
 
 export function After(...actions: any[]) {
-  return function (target: Reposiory, propertyKey: string) {
+  return function (target: Repository, propertyKey: string) {
     const value =
       Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
 
@@ -186,7 +200,7 @@ export function After(...actions: any[]) {
 
 export function Action() {
   return function (
-    target: Reposiory,
+    target: Repository,
     propertyKey: string,
     descriptor: TypedPropertyDescriptor<any>
   ) {
@@ -237,9 +251,9 @@ export interface Context<M = {}> {
 /** FindOne Context */
 export interface ContextOptions<E> {
   project?: { [K in keyof E]: 0 | 1 } & { [x: string]: 0 | 1 }
-  fields?: (keyof E)[]
+  fields?: (keyof E | (string & {}))[]
   sort?: { [K in keyof E]: 0 | 1 } & { [x: string]: 0 | 1 }
-  populates?: (keyof E)[] | Array<PopulateOptions>
+  populates?: (keyof E | (string & {}) | PopulateOptions)[]
   limit?: number
   skip?: number
   session?: any
@@ -260,9 +274,19 @@ export interface ListContext<E = any, M = {}> extends FindContext<E, M> {
   pageSize?: number
 }
 
+interface CascadeContext {
+  rollback?: Rollback
+  execRollback?: boolean
+  cascade?: boolean
+}
+
 /** Create Context */
-interface ContextCreate<E = any, M = { cascadeContext?: CascadeContext }>
-  extends Context<M> {
+interface ContextCreate<E = any, M = AnyObject>
+  extends Context<M>,
+    CascadeContext {
+  // Query for check existed, if set then check entity existed with query before
+  // If Exist throw error
+  query?: FilterQuery<E>
   data: E
   session?: any
   safe?: boolean
@@ -270,9 +294,13 @@ interface ContextCreate<E = any, M = { cascadeContext?: CascadeContext }>
 }
 
 /** CreateMany Context */
-interface ContextCreateMany<E = any, M = { cascadeContext?: CascadeContext }>
+interface ContextCreateMany<E = any, M = AnyObject>
   extends Context<M>,
-    ContextOptions<E> {
+    ContextOptions<E>,
+    CascadeContext {
+  // Query for check existed, if set then check entity existed with query before
+  // If Exist throw error
+  query?: FilterQuery<E>
   data: E[]
   safe?: boolean
   session?: any
@@ -280,9 +308,10 @@ interface ContextCreateMany<E = any, M = { cascadeContext?: CascadeContext }>
 }
 
 /** Update Context */
-interface ContextUpdate<E = any, M = { cascadeContext?: CascadeContext }>
+interface ContextUpdate<E = any, M = AnyObject>
   extends Context<M>,
-    ContextOptions<E> {
+    ContextOptions<E>,
+    CascadeContext {
   query: FilterQuery<E>
   data: UpdateQuery<E>
   upsert?: boolean
@@ -290,23 +319,62 @@ interface ContextUpdate<E = any, M = { cascadeContext?: CascadeContext }>
 }
 
 /** Delete Context */
-interface ContextDelete<E = any, M = {}> extends Context<M>, ContextOptions<E> {
+interface ContextDelete<E = any, M = {}>
+  extends Context<M>,
+    ContextOptions<E>,
+    CascadeContext {
   query: FilterQuery<E>
 }
 
-export interface CascadeContext {
-  rollbacked: boolean
-  rollbacks: any[]
+/**
+ * Rollback
+ */
+export class Rollback {
+  actions: any[] = []
+  rollbacked = false
+  error: any = null
+  results: any[] = []
+  errorIndex: number
+
+  constructor(options: Partial<Rollback> = {}) {
+    Object.assign(this, options)
+  }
+
+  add(action: any) {
+    this.actions.push(action)
+  }
+
+  async run() {
+    if (this.rollbacked) return false
+
+    const start = this.error && this.errorIndex >= 0 ? this.errorIndex : 0
+
+    for (let index = start; index < this.actions.length; index++) {
+      const action = this.actions[index]
+      try {
+        this.results.push(await action())
+      } catch (error) {
+        this.errorIndex = error
+        this.error = error
+        throw error
+      }
+    }
+
+    this.rollbacked = true
+
+    return this.results.length === this.actions.length
+  }
 }
 
 /**
  * Repository
  */
-export class Reposiory<E = any> {
+export class Repository<E = any> {
   name: string
   model: Model<E>
   schema: Schema<E>
   connection: Connection
+  entityCls: E
 
   static global: { before: any; after: any } = {
     before: {},
@@ -335,13 +403,13 @@ export class Reposiory<E = any> {
 
   static events = new EventEmmit()
 
-  static repositories: Map<Connection, { [x: string]: Reposiory }> = new Map()
+  static repositories: Map<Connection, { [x: string]: Repository }> = new Map()
 
   static getRepository(connection: Connection, name: string) {
     return this.repositories.get(connection || defaultConnection)?.[name]
   }
 
-  static registerRepository(connection: Connection, repository: Reposiory) {
+  static registerRepository(connection: Connection, repository: Repository) {
     if (!this.repositories.get(connection)) {
       this.repositories.set(connection, {})
     }
@@ -353,7 +421,7 @@ export class Reposiory<E = any> {
   }
 
   get $events() {
-    return Reposiory.events
+    return Repository.events
   }
 
   constructor(connection?: Connection) {
@@ -372,12 +440,16 @@ export class Reposiory<E = any> {
   onInited() {}
 
   @Before(/.*/)
-  baseBeforeAll(ctx: Context) {
+  baseBeforeAll(ctx: Context & CascadeContext) {
     ctx.meta = ctx.meta || {}
+    if (!Object.prototype.hasOwnProperty.call(ctx, 'cascade')) {
+      ctx.cascade = true
+    }
   }
 
   @After('delete', 'deleteOne')
   async baseAfterDelete(ctx: ContextDelete<E>, rs: any) {
+    if (!ctx.cascade) return rs
     for (const key of Object.keys(this.$cascade)) {
       if (!this.$cascade[key].delete) continue
 
@@ -385,7 +457,7 @@ export class Reposiory<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Reposiory.getRepository(
+      const refRepository = Repository.getRepository(
         this.connection,
         `${ref}Repository`
       )
@@ -426,7 +498,7 @@ export class Reposiory<E = any> {
     'update',
     'updateOne'
   )
-  beforeBaseAction(ctx: Context & { query: any }) {
+  beforeBaseAction(ctx: Context & CascadeContext & { query: any }) {
     if (ctx.query && ctx.query.id) {
       ctx.query._id = ctx.query.id
       delete ctx.query.id
@@ -441,21 +513,25 @@ export class Reposiory<E = any> {
   $after: { [x: string]: string[] } = {}
   $cascade: { [x: string]: CascadeOptions } = {}
 
+  getQueryProject(fields: object | (keyof E)[]) {
+    if (Array.isArray(fields)) {
+      fields.reduce((val: any, field: any) => {
+        val[field] = field.startsWith('-') ? 0 : 1
+        return val
+      }, {})
+    }
+    return fields
+  }
+
   // Repository base actions
   @Action()
   findOne(ctx: FindOneContext<E> = {}) {
-    const project =
-      ctx.project || ctx.fields
-        ? ctx.fields.reduce((val: any, field: any) => {
-            val[field] = 1
-            return val
-          }, {})
-        : undefined
+    const project = this.getQueryProject(ctx.project || ctx.fields)
 
     const queryBuilder = this.model.findOne(
       ctx.query,
       project,
-      this.getBaseOptionFromContext(ctx)
+      this.getBaseOptionFromContext(ctx, ['fields'])
     )
 
     if (ctx.populates) {
@@ -469,23 +545,20 @@ export class Reposiory<E = any> {
 
   @Action()
   find(ctx: FindContext<E> = {}) {
-    const project =
-      ctx.project || ctx.fields
-        ? ctx.fields.reduce((val: any, field: any) => {
-            val[field] = 1
-            return val
-          }, {})
-        : undefined
+    const project = this.getQueryProject(ctx.project || ctx.fields)
 
     const queryBuilder = this.model.find(
       ctx.query,
       project,
-      this.getBaseOptionFromContext({
-        ...ctx,
-        limit: ctx.limit,
-        skip: ctx.skip,
-        sort: ctx.sort,
-      })
+      this.getBaseOptionFromContext(
+        {
+          ...ctx,
+          limit: ctx.limit,
+          skip: ctx.skip,
+          sort: ctx.sort,
+        },
+        ['fields']
+      )
     )
 
     if (ctx.populates) {
@@ -499,13 +572,7 @@ export class Reposiory<E = any> {
 
   @Action()
   async list(ctx: ListContext<E> = {}) {
-    const project =
-      ctx.project || ctx.fields
-        ? ctx.fields.reduce((val: any, field: any) => {
-            val[field] = 1
-            return val
-          }, {})
-        : undefined
+    const project = this.getQueryProject(ctx.project || ctx.fields)
 
     const limit = Number.isInteger(ctx.pageSize)
       ? ctx.pageSize
@@ -522,12 +589,15 @@ export class Reposiory<E = any> {
     const queryBuilder = this.model.find(
       ctx.query,
       project,
-      this.getBaseOptionFromContext({
-        ...ctx,
-        limit,
-        skip,
-        sort: ctx.sort,
-      })
+      this.getBaseOptionFromContext(
+        {
+          ...ctx,
+          limit,
+          skip,
+          sort: ctx.sort,
+        },
+        ['fields']
+      )
     )
 
     if (ctx.populates) {
@@ -538,7 +608,7 @@ export class Reposiory<E = any> {
 
     const [docs, count] = await Promise.all([
       queryBuilder.exec(),
-      queryBuilder.countDocuments(),
+      this.model.find().merge(queryBuilder).countDocuments(),
     ])
 
     return {
@@ -566,7 +636,7 @@ export class Reposiory<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Reposiory.getRepository(
+      const refRepository = Repository.getRepository(
         this.connection,
         ref + 'Repository'
       )
@@ -593,12 +663,12 @@ export class Reposiory<E = any> {
             continue
           }
 
-          if (item.id) {
+          if (item.id && isValidObjectId(item.id)) {
             arr[index] = item.id
             continue
           }
 
-          if (item._id) {
+          if (item._id && isValidObjectId(item._id)) {
             arr[index] = item._id
             continue
           }
@@ -609,17 +679,19 @@ export class Reposiory<E = any> {
                 data: item,
                 meta: {
                   skipHook: true,
-                  cascadeContext: ctx.meta.cascadeContext,
                 },
                 session: ctx.session,
+                ...this.getCascadeContext(ctx),
               },
               [null, undefined]
             ) as any
           )
-          ctx.meta.cascadeContext.rollbacks.push(() => {
+
+          ctx.rollback.add(() => {
             data[key] = value
             return refRepository.model.deleteOne({ _id: doc._id })
           })
+
           arr[index] = doc._id
         }
 
@@ -643,37 +715,33 @@ export class Reposiory<E = any> {
               data: value,
               meta: {
                 skipHook: true,
-                cascadeContext: ctx.meta.cascadeContext,
               },
+              ...this.getCascadeContext(ctx),
               session: ctx.session,
             },
             [null, undefined]
           ) as any
         )
 
-        ctx.meta.cascadeContext.rollbacks.push(() => {
+        ctx.rollback.add(() => {
           data[key] = value
           return refRepository.model.deleteOne({ _id: doc._id })
         })
         data[key] = doc._id
       }
     }
-    // End cascade
+    // End cascade create
   }
 
   @Action()
   async create(ctx: ContextCreate<E>) {
-    // Cascade create
-    const isExcecRollback = !ctx.meta?.cascadeContext
-    if (!ctx.meta.cascadeContext) {
-      ctx.meta.cascadeContext = {
-        rollbacked: false,
-        rollbacks: [],
-      }
+    if (ctx.query) {
+      const exist = await this.model.exists(ctx.query)
+      if (exist) throw new Error('Entity existed')
     }
-
     try {
-      await this.cascadeCreate(ctx)
+      // check cascade
+      if (this.getCascadeContext(ctx)) await this.cascadeCreate(ctx)
       const entity = new this.model(ctx.data)
       await entity.save(this.getBaseOptionFromContext(ctx))
       if (ctx.populates) {
@@ -688,11 +756,8 @@ export class Reposiory<E = any> {
         return entity
       }
     } catch (error) {
-      if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-        await Promise.all(
-          ctx.meta.cascadeContext.rollbacks.map((e: any) => e())
-        )
-        ctx.meta.cascadeContext.rollbacked = true
+      if (this.getCascadeContext(ctx) && ctx.execRollback) {
+        await ctx.rollback.run()
       }
       throw error
     }
@@ -700,22 +765,24 @@ export class Reposiory<E = any> {
 
   @Action()
   async createMany(ctx: ContextCreateMany<E>) {
-    // Cascade createMany
-    const isExcecRollback = !ctx.meta?.cascadeContext
-    if (!ctx.meta.cascadeContext) {
-      ctx.meta.cascadeContext = {
-        rollbacked: false,
-        rollbacks: [],
-      }
+    if (ctx.query) {
+      const exist = await this.model.exists(ctx.query)
+      if (exist) throw new Error('Entity existed')
     }
 
+    // Cascade createMany
     try {
-      for (const item of ctx.data) {
-        if (!item) continue
-        await this.cascadeCreate({
-          ...ctx,
-          data: item,
-        })
+      if (this.getCascadeContext(ctx)) {
+        for (const item of ctx.data) {
+          if (!item) continue
+          if (ctx.cascade) {
+            await this.cascadeCreate({
+              ...ctx,
+              execRollback: false,
+              data: item,
+            })
+          }
+        }
       }
 
       const docs = await this.model.insertMany(
@@ -742,11 +809,8 @@ export class Reposiory<E = any> {
         return docs
       }
     } catch (error) {
-      if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-        await Promise.all(
-          ctx.meta.cascadeContext.rollbacks.map((e: any) => e())
-        )
-        ctx.meta.cascadeContext.rollbacked = true
+      if (this.getCascadeContext(ctx) && ctx.execRollback) {
+        await ctx.rollback.run()
       }
       throw error
     }
@@ -767,119 +831,157 @@ export class Reposiory<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Reposiory.getRepository(
+      const refRepository = Repository.getRepository(
         this.connection,
         ref + 'Repository'
       )
 
       if (!refRepository) continue
 
+      const updater = {}
+
       if (isArray) {
-        if (!Array.isArray(value)) {
-          throw new Error(`${key} must be array`)
-        }
-
-        const arr: any[] = []
-
-        for (let index = 0; index < value.length; index++) {
-          const item = value[index]
-
-          if (!item) {
-            arr[index] = null
-            continue
-          }
-
+        const newDatas = Array.isArray(value) ? value : [value]
+        for (let index = 0; index < newDatas.length; index++) {
+          const item = newDatas[index]
+          // create or update item
           if (isValidObjectId(item)) {
-            arr[index] = item
-            continue
+            set(updater, `${key}.${index}`, item || null)
           }
 
-          const id = item._id || item.id
-          let oldValue: any
-          if (id) {
-            oldValue = await refRepository.model.findOne({ _id: id })
-          }
+          if (
+            typeof item === 'object' &&
+            toMongoId(item) &&
+            isValidObjectId(toMongoId(item))
+          ) {
+            // update
+            const oldValue = await refRepository.model.findOne({
+              _id: toMongoId(item),
+            })
 
-          const doc = await refRepository.updateOne({
-            query: {
-              _id: id || new ObjectId(),
-            },
-            data: item,
-            meta: {
-              skipHook: true,
-              cascadeContext: ctx.meta.cascadeContext,
-            },
-            session: ctx.session,
-            upsert: true,
-          })
+            const doc = await refRepository.updateOne(
+              omitBy(
+                {
+                  query: { _id: toMongoId(item) },
+                  data: omit(item, 'id', '_id'),
+                  meta: {
+                    skipHook: true,
+                  },
+                  ...this.getCascadeContext(ctx),
+                  session: ctx.session,
+                },
+                [undefined, null]
+              ) as any
+            )
 
-          ctx.meta.cascadeContext.rollbacks.push(() => {
-            data[key] = value
-            if (id && oldValue) {
-              return refRepository.model.updateOne({ _id: id }, oldValue)
-            } else {
-              return refRepository.model.deleteOne({ _id: doc._id })
-            }
-          })
-          arr[index] = doc._id
-        }
+            ctx.rollback.add(() => {
+              return refRepository.model.updateOne(
+                { _id: toMongoId(item) },
+                oldValue
+              )
+            })
 
-        data[key] = arr
-      } else {
-        if (isValidObjectId(value)) continue
-
-        const id = value._id || value.id
-        let oldValue: any
-        if (id) {
-          oldValue = await refRepository.model.findOne({ _id: id })
-        }
-
-        const doc = await refRepository.updateOne({
-          query: { _id: id || new ObjectId() },
-          data: value,
-          meta: {
-            skipHook: true,
-            cascadeContext: ctx.meta.cascadeContext,
-          },
-          session: ctx.session,
-          upsert: true,
-        })
-
-        ctx.meta.cascadeContext.rollbacks.push(() => {
-          data[key] = value
-          if (id && oldValue) {
-            return refRepository.model.updateOne({ _id: id }, oldValue)
+            set(updater, `${key}.[${index}]`, toMongoId(item))
           } else {
-            return refRepository.model.deleteOne({ _id: doc._id })
+            // create
+            const doc = await refRepository.create(
+              omitBy(
+                {
+                  data: item,
+                  meta: {
+                    skipHook: true,
+                  },
+                  ...this.getCascadeContext(ctx),
+                  session: ctx.session,
+                },
+                [undefined, null]
+              ) as any
+            )
+
+            ctx.rollback.add(() =>
+              refRepository.model.deleteOne({ _id: toMongoId(doc) })
+            )
+
+            set(updater, `${key}.[${index}]`, toMongoId(doc))
           }
-        })
-        data[key] = doc._id
+        }
+      } else {
+        const item = Array.isArray(value) ? value[0] : value
+        if (isValidObjectId(item)) {
+          set(updater, `${key}`, item || null)
+        }
+
+        if (
+          typeof item === 'object' &&
+          toMongoId(item) &&
+          isValidObjectId(toMongoId(item))
+        ) {
+          const oldValue = await refRepository.model.findOne({
+            _id: toMongoId(item),
+          })
+          // update
+          await refRepository.updateOne(
+            omitBy(
+              {
+                query: { id: toMongoId(item) },
+                data: omit(item, 'id', '_id'),
+                meta: {
+                  skipHook: true,
+                },
+                ...this.getCascadeContext(ctx),
+                session: ctx.session,
+              },
+              [undefined, null]
+            ) as any
+          )
+
+          ctx.rollback.add(() =>
+            refRepository.model.updateOne({ _id: toMongoId(item) }, oldValue)
+          )
+
+          set(updater, `${key}`, toMongoId(item))
+        } else {
+          // create
+          const doc = await refRepository.create(
+            omitBy(
+              {
+                data: item,
+                meta: {
+                  skipHook: true,
+                },
+                ...this.getCascadeContext(ctx),
+                session: ctx.session,
+              },
+              [undefined, null]
+            ) as any
+          )
+
+          ctx.rollback.add(() =>
+            refRepository.model.deleteOne({ _id: toMongoId(doc) })
+          )
+
+          set(updater, `${key}`, toMongoId(doc))
+        }
       }
+
+      unset(data, key)
+      if (data.$set) Object.assign(data.$set, updater)
+      else data.$set = updater
     }
   }
 
   @Action()
   async update(ctx: ContextUpdate<E>) {
-    const isExcecRollback = !ctx.meta?.cascadeContext
-    if (!ctx.meta.cascadeContext) {
-      ctx.meta.cascadeContext = {
-        rollbacked: false,
-        rollbacks: [],
-      }
-    }
     try {
-      await this.cascadeUpdate(ctx)
+      if (this.getCascadeContext(ctx)) await this.cascadeUpdate(ctx)
       return this.model
         .updateMany(ctx.query, ctx.data, this.getBaseOptionFromContext(ctx))
         .then(() =>
           this.find({ ...ctx, meta: { ...ctx.meta, skipHook: true } })
         )
     } catch (error) {
-      if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-        await Promise.all(
-          ctx.meta.cascadeContext.rollbacks.map((e: any) => e())
-        )
-        ctx.meta.cascadeContext.rollbacked = true
+      if (this.getCascadeContext(ctx) && ctx.execRollback) {
+        await ctx.rollback.run()
       }
       throw error
     }
@@ -887,29 +989,31 @@ export class Reposiory<E = any> {
 
   @Action()
   async updateOne(ctx: ContextUpdate<E>) {
-    const isExcecRollback = !ctx.meta?.cascadeContext
-    if (!ctx.meta.cascadeContext) {
-      ctx.meta.cascadeContext = {
-        rollbacked: false,
-        rollbacks: [],
-      }
-    }
-
     try {
-      await this.cascadeUpdate(ctx)
+      if (this.getCascadeContext(ctx)) await this.cascadeUpdate(ctx)
       return this.model
         .updateOne(ctx.query, ctx.data, this.getBaseOptionFromContext(ctx))
         .then(() =>
           this.findOne({ ...ctx, meta: { ...ctx.meta, skipHook: true } })
         )
     } catch (error) {
-      if (isExcecRollback && !ctx.meta.cascadeContext.rollbacked) {
-        await Promise.all(
-          ctx.meta.cascadeContext.rollbacks.map((e: any) => e())
-        )
-        ctx.meta.cascadeContext.rollbacked = true
+      if (this.getCascadeContext(ctx) && ctx.execRollback) {
+        await ctx.rollback.run()
       }
       throw error
+    }
+  }
+
+  getCascadeContext(ctx: Context<CascadeContext> & CascadeContext) {
+    if (!ctx.cascade) return null
+    if (!ctx.rollback) {
+      ctx.rollback = new Rollback()
+      ctx.execRollback = true
+    }
+    return {
+      cascade: ctx.cascade,
+      rollback: ctx.rollback,
+      execRollback: ctx.execRollback,
     }
   }
 
@@ -938,30 +1042,23 @@ export class Reposiory<E = any> {
       .then((rs) => rs.deletedCount)
   }
 
-  getBaseOptionFromContext<T extends object>(ctx: T): Partial<T> {
-    const {
-      fields,
-      limit,
-      skip,
-      sort,
-      populates,
-      project,
-      session,
-      safe,
-      upsert,
-    } = ctx as any
+  getBaseOptionFromContext<T extends object>(
+    ctx: T,
+    excludes: string[] = []
+  ): Partial<T> {
+    const fields = [
+      'fields',
+      'limit',
+      'skip',
+      'sort',
+      'populates',
+      'project',
+      'session',
+      'safe',
+      'upsert',
+    ].filter((fields) => !excludes.includes(fields))
 
-    const options = {
-      fields,
-      limit,
-      skip,
-      sort,
-      populates,
-      project,
-      session,
-      safe,
-      upsert,
-    }
+    const options = pick(ctx, ...fields)
 
     const value = omitBy(options, [undefined, null])
 
@@ -970,5 +1067,10 @@ export class Reposiory<E = any> {
     }
 
     return value as any
+  }
+
+  validate(data: E | undefined | AnyObject) {
+    const entity = plainToClass(this.entityCls as any, data)
+    return validate(entity as any)
   }
 }

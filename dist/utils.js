@@ -1,9 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCascades = exports.getActions = exports.getHooks = exports.omitBy = exports.createMongoConnection = void 0;
-const mongoose_1 = require("mongoose");
+exports.idIsEqual = exports.toMongoId = exports.getCascades = exports.getActions = exports.getHooks = exports.omitBy = exports.createMongoConnection = exports.pick = exports.set = exports.get = void 0;
 require("reflect-metadata");
+const mongoose_1 = require("mongoose");
 const constants_1 = require("./constants");
+const get_1 = __importDefault(require("lodash/get"));
+exports.get = get_1.default;
+const set_1 = __importDefault(require("lodash/set"));
+exports.set = set_1.default;
+const pick_1 = __importDefault(require("lodash/pick"));
+exports.pick = pick_1.default;
 function createMongoConnection(uri, options) {
     const connection = mongoose_1.createConnection(uri || 'mongodb://localhost:27017', Object.assign({ useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true, useFindAndModify: false, autoIndex: true }, options));
     const ready = new Promise((resolve) => {
@@ -81,3 +90,19 @@ function getCascades(target) {
     return result;
 }
 exports.getCascades = getCascades;
+// mongoid
+// -------
+const toMongoId = (value) => {
+    if (!value)
+        return null;
+    if (typeof value === 'string')
+        return value;
+    if (typeof value === 'object') {
+        if (value.constructor.name === 'ObjectID')
+            return value.toHexString();
+        return value._id || value.id;
+    }
+};
+exports.toMongoId = toMongoId;
+const idIsEqual = (val1, val2) => exports.toMongoId(val1) === exports.toMongoId(val2);
+exports.idIsEqual = idIsEqual;

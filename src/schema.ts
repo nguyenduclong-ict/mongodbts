@@ -1,6 +1,19 @@
-import { Schema, SchemaDefinition, SchemaOptions } from 'mongoose'
-import 'reflect-metadata'
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator'
+import { unset } from 'lodash'
+import { Schema, SchemaDefinitionProperty, SchemaOptions } from 'mongoose'
 import { KEYS } from './constants'
+import { IsObjectId, IsRequired } from './validate'
 
 // <==== decorators
 export function Entity(options: SchemaOptions = {}) {
@@ -14,11 +27,93 @@ export function Entity(options: SchemaOptions = {}) {
   }
 }
 
-export function Field(fieldDefinition: SchemaDefinition[''] | { type: any }) {
-  return function (target: any, propertyKey: string) {
+export type FieldType = SchemaDefinitionProperty<any> & {
+  type?: any
+  default?: any
+  addValidate?: boolean
+}
+
+const getType = (type: any) => {
+  return type?.schemaName || type?.name
+}
+
+const addValidate = (item: any, taget: any, propertyKey: string) => {
+  const isMakeValidate = (obj: any) => {
+    return (
+      !Object.prototype.hasOwnProperty.call(obj, 'addValidate') ||
+      obj.addValidate === true
+    )
+  }
+
+  if (!isMakeValidate(Array.isArray(item) ? item[0] : item)) return
+
+  const each = Array.isArray(item) || item.type?.name === 'Array'
+  const isRequired = each ? !!item[0].required : !!item.required
+  const type = each
+    ? getType(item[0].type) || getType(item[0])
+    : getType(item.type) || getType(item)
+  const result = []
+
+  // console.log('=>>>', propertyKey, { isRequired, type })
+  if (!isRequired) result.push(IsOptional({ each }))
+  else {
+    result.push(IsRequired({ each }))
+  }
+
+  switch (type) {
+    case 'String':
+      if (each) result.push(IsArray())
+      if (item.minlength >= 0) result.push(MinLength(item.minlength))
+      else if (item.maxlength >= 0) result.push(MaxLength(item.maxlength))
+      else if (item.length >= 0) result.push(Length(item.length))
+      else result.push(IsString())
+      if (item.enum) result.push(IsIn(item.enum))
+      break
+    case 'Number':
+      if (each) result.push(IsArray())
+      if (item.min >= 0) result.push(Min(item.max, { each }))
+      else if (item.max >= 0) result.push(Max(item.max, { each }))
+      else result.push(IsString())
+      if (item.enum) result.push(IsIn(item.enum, { each }))
+      break
+    case 'Boolean':
+      if (each) result.push(IsArray())
+      result.push(IsBoolean({ each }))
+      break
+    case 'ObjectId':
+      result.push(IsObjectId({ each }))
+      break
+  }
+
+  result.forEach((func) => func(taget, propertyKey))
+}
+
+const getBaseDefine = (define: any) => {
+  if (Array.isArray(define)) {
+    for (let index = 0; index < define.length; index++) {
+      const item = define[index]
+      define[index] = getBaseDefine(item)
+    }
+    return define
+  } else {
+    unset(define, 'addValidate')
+    return define
+  }
+}
+
+export function Field(field: FieldType): PropertyDecorator {
+  if ([String, Boolean, Number].includes(field as any)) {
+    field = {
+      type: field,
+    }
+  }
+
+  return function (target: any, propertyKey: string | symbol) {
+    addValidate(field, target, propertyKey as any)
+
     const definition =
       Reflect.getOwnMetadata(KEYS.SCHEMA_DEFINITION, target.constructor) || {}
-    definition[propertyKey] = fieldDefinition
+    definition[propertyKey] = getBaseDefine(field)
     Reflect.defineMetadata(
       KEYS.SCHEMA_DEFINITION,
       definition,
@@ -28,7 +123,7 @@ export function Field(fieldDefinition: SchemaDefinition[''] | { type: any }) {
 }
 
 export function Index<E = any>(
-  fields: { [K in keyof E]: 0 | 1 },
+  fields: { [K in keyof E]?: 0 | 1 },
   options?: any
 ) {
   return function (constructor: any) {

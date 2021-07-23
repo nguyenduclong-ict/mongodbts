@@ -1,26 +1,27 @@
-import { Reposiory } from '../src'
+import { Repository } from '../src'
 import { createMongoConnection } from '../src/utils'
 import { CommentRepository } from './entities'
-import { Post, PostRepository } from './entities/Post'
+import { PostRepository } from './entities/Post'
 import { UserRepository } from './entities/User'
+import { ObjectId } from 'mongodb'
 
 const { connection, ready } = createMongoConnection(
-  'mongodb://localhost:27018',
+  'mongodb://localhost:27017',
   {
-    dbName: 'test',
-    user: 'testuser',
-    pass: 'abc123',
-    authSource: 'test',
+    dbName: 'tstest',
+    user: 'tstest',
+    pass: 'tstest',
+    authSource: 'tstest',
   }
 )
 
-Reposiory.addBefore(/.*/, (ctx: any) => {
+Repository.addBefore(/.*/, (ctx: any) => {
   if (ctx.meta) {
     ctx.meta.globalBeforeIsCall = true
   }
 })
 
-Reposiory.addAfter(/.*/, (ctx: any, ...args: any[]) => {
+Repository.addAfter(/.*/, (ctx: any, ...args: any[]) => {
   if (ctx.meta) {
     ctx.meta.globalAfterIsCall = true
   }
@@ -42,7 +43,7 @@ beforeAll(async () => {
 })
 
 describe('Repository', () => {
-  it('repository property', () => {
+  it('repository property', async () => {
     expect(userRepository.name).toEqual('UserRepository')
   })
 
@@ -107,6 +108,7 @@ describe('Repository', () => {
           username: 'testcascade',
         },
       },
+      cascade: true,
       populates: ['comments', 'user'],
     })
 
@@ -198,6 +200,7 @@ describe('Repository', () => {
           ],
         },
       ],
+      cascade: true,
       populates: ['comments'],
     })
 
@@ -274,6 +277,7 @@ describe('Repository', () => {
           { commentId: 'updateOne cascade 1', content: 'updateOne cascade 1' },
         ],
       },
+      cascade: true,
       populates: ['comments'],
     })
 
@@ -292,6 +296,7 @@ describe('Repository', () => {
           { commentId: 'updateOne cascade 2', content: 'updateOne cascade 2' },
         ],
       },
+      cascade: true,
       populates: ['comments'],
     })
 
@@ -313,10 +318,13 @@ describe('Repository', () => {
           },
         ],
       },
+      cascade: true,
       populates: ['comments'],
     })
 
     expect(post.comments.length).toEqual(1)
+
+    let err
 
     try {
       await postRepository.updateOne({
@@ -332,24 +340,38 @@ describe('Repository', () => {
             } as any,
             {
               commentId: 'updateOne & cascade & rollback:updated',
-              content: 'updateOne cascade 2',
+              content: 'updateOne & cascade & rollback:updated',
             },
           ],
         },
+        cascade: true,
         populates: ['comments'],
       })
-    } catch (error) {}
+    } catch (error) {
+      err = error
+    }
+    expect(err).not.toBeUndefined()
 
     const find = await postRepository.findOne({
       query: { id: post.id },
       populates: ['comments'],
     })
 
+    expect(find.comments.length).toEqual(1)
+
     const comment = await commentRepository.findOne({
       query: {
-        commentId: 'updateOne & cascade & rollback:updated',
+        content: 'updateOne & cascade & rollback:updated',
       },
     })
+
+    expect(
+      await commentRepository.findOne({
+        query: {
+          commentId: 'updateOne & cascade & rollback:updated',
+        },
+      })
+    ).toBeNull()
 
     const comment1 = await commentRepository.findOne({
       query: {
@@ -423,6 +445,7 @@ describe('Repository', () => {
           ],
         },
       ],
+      cascade: true,
       populates: ['comments'],
     })
 
@@ -437,11 +460,23 @@ describe('Repository', () => {
           username: 'updateMany & cascade 2',
           name: 'updateMany & cascade 2',
         },
+        comments: [
+          { commentId: 'updateMany & cascade 2:comment', content: 'axx' },
+          { commentId: 'updateMany & cascade 2:comment2', content: 'axx' },
+        ],
       },
+      cascade: true,
       populates: ['comments', 'user'],
     })
 
     _posts.forEach((post) => {
+      expect(post.comments.length).toEqual(2)
+      expect(post.comments[0].commentId).toEqual(
+        'updateMany & cascade 2:comment'
+      )
+      expect(post.comments[1].commentId).toEqual(
+        'updateMany & cascade 2:comment2'
+      )
       expect(post.user).not.toBeNull()
       expect(post.user.username).toEqual('updateMany & cascade 2')
     })
@@ -472,6 +507,7 @@ describe('Repository', () => {
         },
       ],
       populates: ['comments'],
+      cascade: true,
     })
 
     expect(posts.length).toEqual(2)
@@ -489,6 +525,7 @@ describe('Repository', () => {
             } as any,
           ],
         },
+        cascade: true,
         populates: ['comments'],
       })
     } catch (error) {
@@ -523,6 +560,7 @@ describe('Repository', () => {
           username: 'delete cascade',
         },
       },
+      cascade: true,
       populates: ['user'],
     })
 
@@ -536,17 +574,22 @@ describe('Repository', () => {
   it('cascade when reference delete:[set null]', async () => {
     const post = await postRepository.create({
       data: {
-        title: 'delete cascade',
-        content: 'delete cascade',
+        title: 'delete cascade:[set null]',
+        content: 'delete cascade:[set null]',
         user: {
-          name: 'delete cascade',
-          username: 'delete cascade',
+          name: 'delete cascade:[set null]',
+          username: 'delete cascade:[set null]',
         },
       },
+      cascade: true,
       populates: ['user'],
     })
 
     await userRepository.deleteOne({ query: { _id: post.user._id } })
+    const delay = (duration = 100) =>
+      new Promise((resolve) => setTimeout(resolve, duration))
+    await delay()
+
     expect(
       (await postRepository.findOne({ query: { _id: post._id } })).user
     ).toBeNull()
