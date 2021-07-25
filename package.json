@@ -11,8 +11,11 @@
     "build": "tsc -p tsconfig.prod.json",
     "test": "jest",
     "lint": "eslint . --ext .ts",
-    "publish": "npm publish --access public",
+    "publish": "npm publish --access=public",
     "prepublish": "git push origin master"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@types/lodash": "^4.14.171",
