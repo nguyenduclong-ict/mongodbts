@@ -10,9 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.prod.json",
     "test": "jest",
-    "lint": "eslint . --ext .ts",
-    "publish": "npm publish --access=public",
-    "prepublish": "git push origin master"
+    "lint": "eslint . --ext .ts"
   },
   "publishConfig": {
     "access": "public"
