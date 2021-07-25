@@ -2,8 +2,8 @@
 import EventEmmit from 'events';
 import { AnyObject, Connection, FilterQuery, Model, PopulateOptions, Schema, UpdateQuery } from 'mongoose';
 import { CascadeOptions } from './schema';
-declare type Constructor<T = {}> = new (...args: any[]) => T;
-export declare function repository(EntityClass: any, connection?: Connection): <T extends Constructor<Repository<any>>>(constructor: T) => {
+export declare type Constructor<T = {}> = new (...args: any[]) => T;
+export declare function repository(EntityClass: any, connection?: Connection, schema?: Schema): <T extends Constructor<Repository<any>>>(constructor: T) => {
     new (...args: any[]): {
         baseOnInited(): void;
         name: string;
@@ -11,18 +11,7 @@ export declare function repository(EntityClass: any, connection?: Connection): <
         schema: Schema<any, Model<any, any, any>, undefined, any>;
         connection: Connection;
         entityCls: any;
-        readonly $events: EventEmmit;
-        getRef(key: string): {
-            isArray: boolean;
-            ref: any;
-        };
-        onInited(): void;
-        baseBeforeAll(ctx: Context<{}> & CascadeContext): void;
-        baseAfterDelete(ctx: ContextDelete<any, {}>, rs: any): Promise<any>;
-        beforeBaseAction(ctx: Context<{}> & CascadeContext & {
-            query: any;
-        }): void;
-        onCreateSchema(schema: Schema<any, Model<any, any, any>, undefined, any>): Schema<any, Model<any, any, any>, undefined, any>;
+        options: Mongodbts.BaseOptions;
         $before: {
             [x: string]: string[];
         };
@@ -32,6 +21,20 @@ export declare function repository(EntityClass: any, connection?: Connection): <
         $cascade: {
             [x: string]: CascadeOptions;
         };
+        addBefore(actions: any, handler: any): void;
+        addAfter(actions: any, handler: any): void;
+        readonly $events: EventEmmit;
+        getRef(key: string): {
+            isArray: boolean;
+            ref: any;
+        };
+        onInited(): void;
+        baseBeforeAll(ctx: Context<{}> & CascadeContext): void;
+        baseAfterDelete(ctx: DeleteContext<any, {}>, rs: any): Promise<any>;
+        beforeBaseAction(ctx: Context<{}> & CascadeContext & {
+            query: any;
+        }): void;
+        onCreateSchema(schema: Schema<any, Model<any, any, any>, undefined, any>): Schema<any, Model<any, any, any>, undefined, any>;
         getQueryProject(fields: object | (string | number | symbol)[]): object | (string | number | symbol)[];
         findOne(ctx?: FindOneContext<any, {}>): Promise<any>;
         find(ctx?: FindContext<any, {}>): Promise<any[]>;
@@ -42,19 +45,19 @@ export declare function repository(EntityClass: any, connection?: Connection): <
             totalPages: number;
             total: number;
         }>;
-        cascadeCreate(ctx: ContextCreate<any, AnyObject>): Promise<void>;
-        create(ctx: ContextCreate<any, AnyObject>): Promise<any>;
-        createMany(ctx: ContextCreateMany<any, AnyObject>): Promise<any[]>;
-        cascadeUpdate(ctx: ContextUpdate<any, AnyObject>): Promise<void>;
-        update(ctx: ContextUpdate<any, AnyObject>): Promise<any[]>;
-        updateOne(ctx: ContextUpdate<any, AnyObject>): Promise<any>;
+        cascadeCreate(ctx: CreateContext<any, AnyObject>): Promise<void>;
+        create(ctx: CreateContext<any, AnyObject>): Promise<any>;
+        createMany(ctx: CreateContextMany<any, AnyObject>): Promise<any[]>;
+        cascadeUpdate(ctx: UpdateContext<any, AnyObject>): Promise<void>;
+        update(ctx: UpdateContext<any, AnyObject>): Promise<any[]>;
+        updateOne(ctx: UpdateContext<any, AnyObject>): Promise<any>;
         getCascadeContext(ctx: Context<CascadeContext> & CascadeContext): {
             cascade: true;
             rollback: Rollback;
             execRollback: boolean;
         };
-        delete(ctx: ContextDelete<any, {}>): Promise<number>;
-        deleteOne(ctx: ContextDelete<any, {}>): Promise<number>;
+        delete(ctx: DeleteContext<any, {}>): Promise<number>;
+        deleteOne(ctx: DeleteContext<any, {}>): Promise<number>;
         getBaseOptionFromContext<T_1 extends object>(ctx: T_1, excludes?: string[]): Partial<T_1>;
         validate(data: any): Promise<import("class-validator").ValidationError[]>;
     };
@@ -64,10 +67,7 @@ export declare function After(...actions: any[]): (target: Repository, propertyK
 export declare function Action(): (target: Repository, propertyKey: string, descriptor: TypedPropertyDescriptor<any>) => void;
 /** Context */
 export interface Context<M = {}> {
-    meta?: M & {
-        skipHook?: boolean;
-        [x: string]: any;
-    };
+    meta?: M & Mongodbts.BaseMeta;
 }
 /** FindOne Context */
 export interface ContextOptions<E> {
@@ -104,7 +104,7 @@ interface CascadeContext {
     cascade?: boolean;
 }
 /** Create Context */
-interface ContextCreate<E = any, M = AnyObject> extends Context<M>, CascadeContext {
+export interface CreateContext<E = any, M = AnyObject> extends Context<M>, CascadeContext {
     query?: FilterQuery<E>;
     data: E;
     session?: any;
@@ -112,7 +112,7 @@ interface ContextCreate<E = any, M = AnyObject> extends Context<M>, CascadeConte
     populates?: (keyof E)[] | Array<PopulateOptions>;
 }
 /** CreateMany Context */
-interface ContextCreateMany<E = any, M = AnyObject> extends Context<M>, ContextOptions<E>, CascadeContext {
+export interface CreateContextMany<E = any, M = AnyObject> extends Context<M>, ContextOptions<E>, CascadeContext {
     query?: FilterQuery<E>;
     data: E[];
     safe?: boolean;
@@ -120,14 +120,14 @@ interface ContextCreateMany<E = any, M = AnyObject> extends Context<M>, ContextO
     populates?: (keyof E)[] | Array<PopulateOptions>;
 }
 /** Update Context */
-interface ContextUpdate<E = any, M = AnyObject> extends Context<M>, ContextOptions<E>, CascadeContext {
+export interface UpdateContext<E = any, M = AnyObject> extends Context<M>, ContextOptions<E>, CascadeContext {
     query: FilterQuery<E>;
     data: UpdateQuery<E>;
     upsert?: boolean;
     populates?: (keyof E)[] | Array<PopulateOptions>;
 }
 /** Delete Context */
-interface ContextDelete<E = any, M = {}> extends Context<M>, ContextOptions<E>, CascadeContext {
+export interface DeleteContext<E = any, M = {}> extends Context<M>, ContextOptions<E>, CascadeContext {
     query: FilterQuery<E>;
 }
 /**
@@ -152,12 +152,24 @@ export declare class Repository<E = any> {
     schema: Schema<E>;
     connection: Connection;
     entityCls: E;
+    options: Mongodbts.BaseOptions;
+    $before: {
+        [x: string]: string[];
+    };
+    $after: {
+        [x: string]: string[];
+    };
+    $cascade: {
+        [x: string]: CascadeOptions;
+    };
     static global: {
         before: any;
         after: any;
     };
     static addBefore(actions: any, handler: any): void;
+    addBefore(actions: any, handler: any): void;
     static addAfter(actions: any, handler: any): void;
+    addAfter(actions: any, handler: any): void;
     static events: EventEmmit;
     static repositories: Map<Connection, {
         [x: string]: Repository;
@@ -172,20 +184,11 @@ export declare class Repository<E = any> {
     };
     onInited(): void;
     baseBeforeAll(ctx: Context & CascadeContext): void;
-    baseAfterDelete(ctx: ContextDelete<E>, rs: any): Promise<any>;
+    baseAfterDelete(ctx: DeleteContext<E>, rs: any): Promise<any>;
     beforeBaseAction(ctx: Context & CascadeContext & {
         query: any;
     }): void;
     onCreateSchema(schema: Schema<E>): Schema<E>;
-    $before: {
-        [x: string]: string[];
-    };
-    $after: {
-        [x: string]: string[];
-    };
-    $cascade: {
-        [x: string]: CascadeOptions;
-    };
     getQueryProject(fields: object | (keyof E)[]): object | (keyof E)[];
     findOne(ctx?: FindOneContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
     find(ctx?: FindContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
@@ -196,19 +199,19 @@ export declare class Repository<E = any> {
         totalPages: number;
         total: number;
     }>;
-    cascadeCreate(ctx: ContextCreate<E>): Promise<void>;
-    create(ctx: ContextCreate<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
-    createMany(ctx: ContextCreateMany<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
-    cascadeUpdate(ctx: ContextUpdate<E>): Promise<void>;
-    update(ctx: ContextUpdate<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
-    updateOne(ctx: ContextUpdate<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
+    cascadeCreate(ctx: CreateContext<E>): Promise<void>;
+    create(ctx: CreateContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
+    createMany(ctx: CreateContextMany<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
+    cascadeUpdate(ctx: UpdateContext<E>): Promise<void>;
+    update(ctx: UpdateContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
+    updateOne(ctx: UpdateContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
     getCascadeContext(ctx: Context<CascadeContext> & CascadeContext): {
         cascade: true;
         rollback: Rollback;
         execRollback: boolean;
     };
-    delete(ctx: ContextDelete<E, {}>): Promise<number>;
-    deleteOne(ctx: ContextDelete<E>): Promise<number>;
+    delete(ctx: DeleteContext<E, {}>): Promise<number>;
+    deleteOne(ctx: DeleteContext<E>): Promise<number>;
     getBaseOptionFromContext<T extends object>(ctx: T, excludes?: string[]): Partial<T>;
     validate(data: E | undefined | AnyObject): Promise<import("class-validator").ValidationError[]>;
 }

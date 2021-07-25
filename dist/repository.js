@@ -31,13 +31,13 @@ const constants_1 = require("./constants");
 const schema_1 = require("./schema");
 const utils_1 = require("./utils");
 // @ts-ignore
-function repository(EntityClass, connection) {
+function repository(EntityClass, connection, schema) {
     return function (constructor) {
         return class extends constructor {
             constructor(...args) {
                 super(...args);
                 this.entityCls = EntityClass;
-                this.name = constructor.name;
+                this.name = EntityClass.name;
                 const actions = utils_1.getActions(constructor);
                 const cascade = utils_1.getCascades(EntityClass);
                 const before = utils_1.getHooks(constants_1.KEYS.REPOSITORY_BEFORE, constructor);
@@ -108,7 +108,10 @@ function repository(EntityClass, connection) {
                         this.$after[key].push(...handlers);
                     }
                 });
-                this.schema = this.onCreateSchema(schema_1.createSchema(EntityClass));
+                this.schema =
+                    this.schema ||
+                        schema ||
+                        this.onCreateSchema(schema_1.createSchema(EntityClass));
                 this.connection = this.connection || connection || mongoose_1.connection;
                 this.model =
                     this.connection.models[EntityClass.name] ||
@@ -264,6 +267,7 @@ exports.Rollback = Rollback;
  */
 class Repository {
     constructor(connection) {
+        this.options = {};
         this.$before = {};
         this.$after = {};
         this.$cascade = {};
@@ -279,6 +283,15 @@ class Repository {
             this.global.before[action].push(handler);
         });
     }
+    addBefore(actions, handler) {
+        if (!Array.isArray(actions)) {
+            actions = [actions];
+        }
+        actions.forEach((action) => {
+            this.$before[action] = this.$before[action] || [];
+            this.$before[action].push(handler);
+        });
+    }
     static addAfter(actions, handler) {
         if (!Array.isArray(actions)) {
             actions = [actions];
@@ -286,6 +299,15 @@ class Repository {
         actions.forEach((action) => {
             this.global.after[action] = this.global.after[action] || [];
             this.global.after[action].push(handler);
+        });
+    }
+    addAfter(actions, handler) {
+        if (!Array.isArray(actions)) {
+            actions = [actions];
+        }
+        actions.forEach((action) => {
+            this.$after[action] = this.$after[action] || [];
+            this.$after[action].push(handler);
         });
     }
     static getRepository(connection, name) {
@@ -329,7 +351,7 @@ class Repository {
                 const { ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Repository.getRepository(this.connection, `${ref}Repository`);
+                const refRepository = Repository.getRepository(this.connection, ref);
                 if (!refRepository)
                     continue;
                 const ids = [];
@@ -443,7 +465,7 @@ class Repository {
                 const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Repository.getRepository(this.connection, ref + 'Repository');
+                const refRepository = Repository.getRepository(this.connection, ref);
                 if (!refRepository)
                     continue;
                 if (isArray) {
@@ -596,7 +618,7 @@ class Repository {
                 const { isArray, ref } = this.getRef(key);
                 if (!ref)
                     continue;
-                const refRepository = Repository.getRepository(this.connection, ref + 'Repository');
+                const refRepository = Repository.getRepository(this.connection, ref);
                 if (!refRepository)
                     continue;
                 const updater = {};

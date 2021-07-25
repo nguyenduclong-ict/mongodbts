@@ -23,5 +23,6 @@ module.exports = {
     '@typescript-eslint/no-empty-interface': 0,
     'no-empty': 0,
     '@typescript-eslint/no-unused-vars': 0,
+    '@typescript-eslint/no-namespace': 0,
   },
 }

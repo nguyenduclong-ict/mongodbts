@@ -11,12 +11,22 @@ import {
   MinLength,
 } from 'class-validator'
 import { unset } from 'lodash'
-import { Schema, SchemaDefinitionProperty, SchemaOptions } from 'mongoose'
+import {
+  IndexOptions,
+  Schema,
+  SchemaDefinitionProperty,
+  SchemaOptions,
+} from 'mongoose'
 import { KEYS } from './constants'
 import { IsObjectId, IsRequired } from './validate'
 
+export interface MongoSchemaOptions extends SchemaOptions {
+  name?: string // name show on client
+  description?: string
+}
+
 // <==== decorators
-export function Entity(options: SchemaOptions = {}) {
+export function Entity(options: MongoSchemaOptions = {}) {
   return function (constructor: any) {
     options = {
       id: true,
@@ -109,16 +119,31 @@ export function Field(field: FieldType): PropertyDecorator {
   }
 
   return function (target: any, propertyKey: string | symbol) {
-    addValidate(field, target, propertyKey as any)
+    const fieldDefine = getBaseDefine(field)
+
+    addValidate(fieldDefine, target, propertyKey as any)
 
     const definition =
       Reflect.getOwnMetadata(KEYS.SCHEMA_DEFINITION, target.constructor) || {}
-    definition[propertyKey] = getBaseDefine(field)
+    definition[propertyKey] = getBaseDefine(fieldDefine)
     Reflect.defineMetadata(
       KEYS.SCHEMA_DEFINITION,
       definition,
       target.constructor
     )
+
+    // add raw defind for get object description of entity
+    const raw =
+      Reflect.getOwnMetadata(KEYS.SCHEMA_RAW, target.constructor) || {}
+    raw[propertyKey] = {
+      ...(Array.isArray(fieldDefine) ? fieldDefine[0] : fieldDefine),
+      isArray:
+        Array.isArray(fieldDefine) || getType(fieldDefine.type) === 'Array',
+      type: Array.isArray(fieldDefine)
+        ? getType(fieldDefine[0].type) || getType(fieldDefine[0])
+        : getType(fieldDefine.type) || getType(fieldDefine),
+    }
+    Reflect.defineMetadata(KEYS.SCHEMA_RAW, raw, target.constructor)
   }
 }
 

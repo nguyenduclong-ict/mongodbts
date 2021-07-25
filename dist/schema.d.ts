@@ -1,5 +1,9 @@
 import { Schema, SchemaDefinitionProperty, SchemaOptions } from 'mongoose';
-export declare function Entity(options?: SchemaOptions): (constructor: any) => void;
+export interface MongoSchemaOptions extends SchemaOptions {
+    name?: string;
+    description?: string;
+}
+export declare function Entity(options?: MongoSchemaOptions): (constructor: any) => void;
 export declare type FieldType = SchemaDefinitionProperty<any> & {
     type?: any;
     default?: any;

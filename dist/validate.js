@@ -25,7 +25,7 @@ exports.IsObjectId = IsObjectId;
 function IsRequired(validationOptions) {
     return function (object, propertyName) {
         class_validator_1.registerDecorator({
-            name: 'ssRequired',
+            name: 'isRequired',
             target: object.constructor,
             propertyName: propertyName,
             constraints: [],

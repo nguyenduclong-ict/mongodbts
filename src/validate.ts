@@ -32,7 +32,7 @@ export function IsObjectId(validationOptions?: ValidationOptions) {
 export function IsRequired(validationOptions?: ValidationOptions) {
   return function (object: Object, propertyName: string) {
     registerDecorator({
-      name: 'ssRequired',
+      name: 'isRequired',
       target: object.constructor,
       propertyName: propertyName,
       constraints: [],

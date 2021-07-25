@@ -44,7 +44,7 @@ beforeAll(async () => {
 
 describe('Repository', () => {
   it('repository property', async () => {
-    expect(userRepository.name).toEqual('UserRepository')
+    expect(userRepository.name).toEqual('User')
   })
 
   it('create', async () => {

@@ -95,10 +95,17 @@ function Field(field) {
         };
     }
     return function (target, propertyKey) {
-        addValidate(field, target, propertyKey);
+        const fieldDefine = getBaseDefine(field);
+        addValidate(fieldDefine, target, propertyKey);
         const definition = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_DEFINITION, target.constructor) || {};
-        definition[propertyKey] = getBaseDefine(field);
+        definition[propertyKey] = getBaseDefine(fieldDefine);
         Reflect.defineMetadata(constants_1.KEYS.SCHEMA_DEFINITION, definition, target.constructor);
+        // add raw defind for get object description of entity
+        const raw = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_RAW, target.constructor) || {};
+        raw[propertyKey] = Object.assign(Object.assign({}, (Array.isArray(fieldDefine) ? fieldDefine[0] : fieldDefine)), { isArray: Array.isArray(fieldDefine) || getType(fieldDefine.type) === 'Array', type: Array.isArray(fieldDefine)
+                ? getType(fieldDefine[0].type) || getType(fieldDefine[0])
+                : getType(fieldDefine.type) || getType(fieldDefine) });
+        Reflect.defineMetadata(constants_1.KEYS.SCHEMA_RAW, raw, target.constructor);
     };
 }
 exports.Field = Field;

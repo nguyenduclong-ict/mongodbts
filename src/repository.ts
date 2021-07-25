@@ -2,7 +2,6 @@ import { plainToClass } from 'class-transformer'
 import { validate } from 'class-validator'
 import EventEmmit from 'events'
 import { omit, set, unset } from 'lodash'
-import { ObjectId } from 'mongodb'
 import {
   AnyObject,
   Connection,
@@ -26,10 +25,14 @@ import {
 } from './utils'
 
 // <==== decorators
-type Constructor<T = {}> = new (...args: any[]) => T
+export type Constructor<T = {}> = new (...args: any[]) => T
 
 // @ts-ignore
-export function repository(EntityClass: any, connection?: Connection) {
+export function repository(
+  EntityClass: any,
+  connection?: Connection,
+  schema?: Schema
+) {
   return function <T extends Constructor<Repository<typeof EntityClass>>>(
     constructor: T
   ) {
@@ -37,7 +40,7 @@ export function repository(EntityClass: any, connection?: Connection) {
       constructor(...args: any[]) {
         super(...args)
         this.entityCls = EntityClass
-        this.name = constructor.name
+        this.name = EntityClass.name
         const actions: string[] = getActions(constructor)
         const cascade = getCascades(EntityClass)
         const before = getHooks(KEYS.REPOSITORY_BEFORE, constructor)
@@ -110,7 +113,10 @@ export function repository(EntityClass: any, connection?: Connection) {
           }
         })
 
-        this.schema = this.onCreateSchema(createSchema(EntityClass))
+        this.schema =
+          this.schema ||
+          schema ||
+          this.onCreateSchema(createSchema(EntityClass))
         this.connection = this.connection || connection || defaultConnection
         this.model =
           this.connection.models[EntityClass.name] ||
@@ -245,7 +251,7 @@ export function Action() {
 
 /** Context */
 export interface Context<M = {}> {
-  meta?: M & { skipHook?: boolean; [x: string]: any }
+  meta?: M & Mongodbts.BaseMeta
 }
 
 /** FindOne Context */
@@ -281,7 +287,7 @@ interface CascadeContext {
 }
 
 /** Create Context */
-interface ContextCreate<E = any, M = AnyObject>
+export interface CreateContext<E = any, M = AnyObject>
   extends Context<M>,
     CascadeContext {
   // Query for check existed, if set then check entity existed with query before
@@ -294,7 +300,7 @@ interface ContextCreate<E = any, M = AnyObject>
 }
 
 /** CreateMany Context */
-interface ContextCreateMany<E = any, M = AnyObject>
+export interface CreateContextMany<E = any, M = AnyObject>
   extends Context<M>,
     ContextOptions<E>,
     CascadeContext {
@@ -308,7 +314,7 @@ interface ContextCreateMany<E = any, M = AnyObject>
 }
 
 /** Update Context */
-interface ContextUpdate<E = any, M = AnyObject>
+export interface UpdateContext<E = any, M = AnyObject>
   extends Context<M>,
     ContextOptions<E>,
     CascadeContext {
@@ -319,7 +325,7 @@ interface ContextUpdate<E = any, M = AnyObject>
 }
 
 /** Delete Context */
-interface ContextDelete<E = any, M = {}>
+export interface DeleteContext<E = any, M = {}>
   extends Context<M>,
     ContextOptions<E>,
     CascadeContext {
@@ -365,7 +371,6 @@ export class Rollback {
     return this.results.length === this.actions.length
   }
 }
-
 /**
  * Repository
  */
@@ -375,6 +380,11 @@ export class Repository<E = any> {
   schema: Schema<E>
   connection: Connection
   entityCls: E
+  options: Mongodbts.BaseOptions = {} as any
+
+  $before: { [x: string]: string[] } = {}
+  $after: { [x: string]: string[] } = {}
+  $cascade: { [x: string]: CascadeOptions } = {}
 
   static global: { before: any; after: any } = {
     before: {},
@@ -391,6 +401,16 @@ export class Repository<E = any> {
     })
   }
 
+  addBefore(actions: any, handler: any) {
+    if (!Array.isArray(actions)) {
+      actions = [actions]
+    }
+    actions.forEach((action: any) => {
+      this.$before[action] = this.$before[action] || []
+      this.$before[action].push(handler)
+    })
+  }
+
   static addAfter(actions: any, handler: any) {
     if (!Array.isArray(actions)) {
       actions = [actions]
@@ -398,6 +418,16 @@ export class Repository<E = any> {
     actions.forEach((action: any) => {
       this.global.after[action] = this.global.after[action] || []
       this.global.after[action].push(handler)
+    })
+  }
+
+  addAfter(actions: any, handler: any) {
+    if (!Array.isArray(actions)) {
+      actions = [actions]
+    }
+    actions.forEach((action: any) => {
+      this.$after[action] = this.$after[action] || []
+      this.$after[action].push(handler)
     })
   }
 
@@ -448,7 +478,7 @@ export class Repository<E = any> {
   }
 
   @After('delete', 'deleteOne')
-  async baseAfterDelete(ctx: ContextDelete<E>, rs: any) {
+  async baseAfterDelete(ctx: DeleteContext<E>, rs: any) {
     if (!ctx.cascade) return rs
     for (const key of Object.keys(this.$cascade)) {
       if (!this.$cascade[key].delete) continue
@@ -457,10 +487,7 @@ export class Repository<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Repository.getRepository(
-        this.connection,
-        `${ref}Repository`
-      )
+      const refRepository = Repository.getRepository(this.connection, ref)
       if (!refRepository) continue
 
       const ids: any[] = []
@@ -508,10 +535,6 @@ export class Repository<E = any> {
   onCreateSchema(schema: Schema<E>): Schema<E> {
     return schema
   }
-
-  $before: { [x: string]: string[] } = {}
-  $after: { [x: string]: string[] } = {}
-  $cascade: { [x: string]: CascadeOptions } = {}
 
   getQueryProject(fields: object | (keyof E)[]) {
     if (Array.isArray(fields)) {
@@ -620,7 +643,7 @@ export class Repository<E = any> {
     }
   }
 
-  async cascadeCreate(ctx: ContextCreate<E>) {
+  async cascadeCreate(ctx: CreateContext<E>) {
     const data: any = ctx.data
 
     for (const key of Object.keys(this.$cascade)) {
@@ -636,10 +659,7 @@ export class Repository<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Repository.getRepository(
-        this.connection,
-        ref + 'Repository'
-      )
+      const refRepository = Repository.getRepository(this.connection, ref)
 
       if (!refRepository) continue
 
@@ -734,7 +754,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async create(ctx: ContextCreate<E>) {
+  async create(ctx: CreateContext<E>) {
     if (ctx.query) {
       const exist = await this.model.exists(ctx.query)
       if (exist) throw new Error('Entity existed')
@@ -764,7 +784,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async createMany(ctx: ContextCreateMany<E>) {
+  async createMany(ctx: CreateContextMany<E>) {
     if (ctx.query) {
       const exist = await this.model.exists(ctx.query)
       if (exist) throw new Error('Entity existed')
@@ -816,7 +836,7 @@ export class Repository<E = any> {
     }
   }
 
-  async cascadeUpdate(ctx: ContextUpdate<E>) {
+  async cascadeUpdate(ctx: UpdateContext<E>) {
     const data: any = ctx.data
     for (const key of Object.keys(this.$cascade)) {
       if (!this.$cascade[key].update) continue
@@ -831,10 +851,7 @@ export class Repository<E = any> {
 
       if (!ref) continue
 
-      const refRepository = Repository.getRepository(
-        this.connection,
-        ref + 'Repository'
-      )
+      const refRepository = Repository.getRepository(this.connection, ref)
 
       if (!refRepository) continue
 
@@ -971,7 +988,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async update(ctx: ContextUpdate<E>) {
+  async update(ctx: UpdateContext<E>) {
     try {
       if (this.getCascadeContext(ctx)) await this.cascadeUpdate(ctx)
       return this.model
@@ -988,7 +1005,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async updateOne(ctx: ContextUpdate<E>) {
+  async updateOne(ctx: UpdateContext<E>) {
     try {
       if (this.getCascadeContext(ctx)) await this.cascadeUpdate(ctx)
       return this.model
@@ -1018,7 +1035,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async delete(ctx: ContextDelete<E, {}>) {
+  async delete(ctx: DeleteContext<E, {}>) {
     ctx.meta.deleted = await this.model.find(
       ctx.query,
       null,
@@ -1030,7 +1047,7 @@ export class Repository<E = any> {
   }
 
   @Action()
-  async deleteOne(ctx: ContextDelete<E>) {
+  async deleteOne(ctx: DeleteContext<E>) {
     ctx.meta.deleted = await this.model.find(
       ctx.query,
       null,
