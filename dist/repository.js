@@ -314,6 +314,9 @@ class Repository {
         var _a;
         return (_a = this.repositories.get(connection || mongoose_1.connection)) === null || _a === void 0 ? void 0 : _a[name];
     }
+    static getRepositories(connection) {
+        return Object.values(this.repositories.get(connection || mongoose_1.connection) || {});
+    }
     static registerRepository(connection, repository) {
         if (!this.repositories.get(connection)) {
             this.repositories.set(connection, {});

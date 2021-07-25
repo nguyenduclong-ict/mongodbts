@@ -439,6 +439,12 @@ export class Repository<E = any> {
     return this.repositories.get(connection || defaultConnection)?.[name]
   }
 
+  static getRepositories(connection?: Connection) {
+    return Object.values(
+      this.repositories.get(connection || defaultConnection) || {}
+    )
+  }
+
   static registerRepository(connection: Connection, repository: Repository) {
     if (!this.repositories.get(connection)) {
       this.repositories.set(connection, {})

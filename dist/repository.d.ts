@@ -175,6 +175,7 @@ export declare class Repository<E = any> {
         [x: string]: Repository;
     }>;
     static getRepository(connection: Connection, name: string): Repository<any>;
+    static getRepositories(connection?: Connection): Repository<any>[];
     static registerRepository(connection: Connection, repository: Repository): boolean;
     get $events(): EventEmmit;
     constructor(connection?: Connection);
