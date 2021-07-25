@@ -12,6 +12,10 @@
     "test": "jest",
     "lint": "eslint . --ext .ts"
   },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:nguyenduclong-ict/mongodbts.git"
+  },
   "dependencies": {
     "@types/lodash": "^4.14.171",
     "class-transformer": "^0.4.0",
