@@ -34,8 +34,8 @@ export declare function repository(EntityClass: any, connection?: Connection, sc
         beforeBaseAction(ctx: Context<{}> & CascadeContext & {
             query: any;
         }): void;
-        onCreateSchema(schema: Schema<any, Model<any, any, any>, undefined, any>): Schema<any, Model<any, any, any>, undefined, any>;
         getQueryProject(fields: object | (string | number | symbol)[]): object | (string | number | symbol)[];
+        onCreateSchema(schema: Schema<any, Model<any, any, any>, undefined, any>): void | Schema<any, Model<any, any, any>, undefined, any>;
         findOne(ctx?: FindOneContext<any, {}>): Promise<any>;
         find(ctx?: FindContext<any, {}>): Promise<any[]>;
         list(ctx?: ListContext<any, {}>): Promise<{
@@ -189,8 +189,8 @@ export declare class Repository<E = any> {
     beforeBaseAction(ctx: Context & CascadeContext & {
         query: any;
     }): void;
-    onCreateSchema(schema: Schema<E>): Schema<E>;
     getQueryProject(fields: object | (keyof E)[]): object | (keyof E)[];
+    onCreateSchema(schema: Schema<E>): Schema<E> | void;
     findOne(ctx?: FindOneContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>>;
     find(ctx?: FindContext<E>): Promise<import("mongoose").EnforceDocument<E, {}>[]>;
     list(ctx?: ListContext<E>): Promise<{

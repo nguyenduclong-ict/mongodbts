@@ -108,10 +108,9 @@ function repository(EntityClass, connection, schema) {
                         this.$after[key].push(...handlers);
                     }
                 });
-                this.schema =
-                    this.schema ||
-                        schema ||
-                        this.onCreateSchema(schema_1.createSchema(EntityClass));
+                this.schema = this.schema || schema || schema_1.createSchema(this.entityCls);
+                if (this.onCreateSchema)
+                    this.onCreateSchema(this.schema);
                 this.connection = this.connection || connection || mongoose_1.connection;
                 this.model =
                     this.connection.models[EntityClass.name] ||
@@ -388,9 +387,6 @@ class Repository {
             delete ctx.query.id;
         }
     }
-    onCreateSchema(schema) {
-        return schema;
-    }
     getQueryProject(fields) {
         if (Array.isArray(fields)) {
             fields.reduce((val, field) => {
@@ -400,6 +396,7 @@ class Repository {
         }
         return fields;
     }
+    onCreateSchema(schema) { }
     // Repository base actions
     findOne(ctx = {}) {
         const project = this.getQueryProject(ctx.project || ctx.fields);

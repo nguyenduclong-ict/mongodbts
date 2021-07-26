@@ -113,10 +113,8 @@ export function repository(
           }
         })
 
-        this.schema =
-          this.schema ||
-          schema ||
-          this.onCreateSchema(createSchema(EntityClass))
+        this.schema = this.schema || schema || createSchema(this.entityCls)
+        if (this.onCreateSchema) this.onCreateSchema(this.schema)
         this.connection = this.connection || connection || defaultConnection
         this.model =
           this.connection.models[EntityClass.name] ||
@@ -538,10 +536,6 @@ export class Repository<E = any> {
     }
   }
 
-  onCreateSchema(schema: Schema<E>): Schema<E> {
-    return schema
-  }
-
   getQueryProject(fields: object | (keyof E)[]) {
     if (Array.isArray(fields)) {
       fields.reduce((val: any, field: any) => {
@@ -551,6 +545,8 @@ export class Repository<E = any> {
     }
     return fields
   }
+
+  onCreateSchema(schema: Schema<E>): Schema<E> | void {}
 
   // Repository base actions
   @Action()
