@@ -10,7 +10,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator'
-import { unset } from 'lodash'
+import { omit, unset } from 'lodash'
 import {
   IndexOptions,
   Schema,
@@ -143,6 +143,7 @@ export function Field(field: FieldType): PropertyDecorator {
         ? getType(fieldDefine[0].type) || getType(fieldDefine[0])
         : getType(fieldDefine.type) || getType(fieldDefine),
     }
+
     Reflect.defineMetadata(KEYS.SCHEMA_RAW, raw, target.constructor)
   }
 }
@@ -196,6 +197,23 @@ export function createSchema<E = any>(EC: any): Schema<E> {
     Reflect.getMetadata(KEYS.SCHEMA_OPTIONS, EC) || {}
   const definition = Reflect.getMetadata(KEYS.SCHEMA_DEFINITION, EC) || {}
   const indexes: any[] = Reflect.getMetadata(KEYS.SCHEMA_INDEXES, EC) || []
+  const rawDefinition = Reflect.getMetadata(KEYS.SCHEMA_RAW, EC) || {}
+
+  if (options.timestamps) {
+    if (!rawDefinition.createdAt) {
+      rawDefinition.createdAt = {
+        type: Date,
+        auto: true,
+      }
+    }
+
+    if (!rawDefinition.updatedAt) {
+      rawDefinition.updatedAt = {
+        type: Date,
+        auto: true,
+      }
+    }
+  }
 
   const schema = new Schema<E>(definition, options)
 
