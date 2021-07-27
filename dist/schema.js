@@ -136,6 +136,21 @@ function createSchema(EC) {
     const options = Reflect.getMetadata(constants_1.KEYS.SCHEMA_OPTIONS, EC) || {};
     const definition = Reflect.getMetadata(constants_1.KEYS.SCHEMA_DEFINITION, EC) || {};
     const indexes = Reflect.getMetadata(constants_1.KEYS.SCHEMA_INDEXES, EC) || [];
+    const rawDefinition = Reflect.getMetadata(constants_1.KEYS.SCHEMA_RAW, EC) || {};
+    if (options.timestamps) {
+        if (!rawDefinition.createdAt) {
+            rawDefinition.createdAt = {
+                type: Date,
+                auto: true,
+            };
+        }
+        if (!rawDefinition.updatedAt) {
+            rawDefinition.updatedAt = {
+                type: Date,
+                auto: true,
+            };
+        }
+    }
     const schema = new mongoose_1.Schema(definition, options);
     indexes.forEach(({ fields, options: opts }) => {
         schema.index(fields, opts);
