@@ -149,7 +149,7 @@ export function Field(field: FieldType): PropertyDecorator {
 }
 
 export function Index<E = any>(
-  fields: { [K in keyof E]?: 0 | 1 },
+  fields: { [K in keyof E]?: 0 | 1 | 'text' },
   options?: any
 ) {
   return function (constructor: any) {

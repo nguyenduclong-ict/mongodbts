@@ -11,7 +11,7 @@ export declare type FieldType = SchemaDefinitionProperty<any> & {
 };
 export declare function Field(field: FieldType): PropertyDecorator;
 export declare function Index<E = any>(fields: {
-    [K in keyof E]?: 0 | 1;
+    [K in keyof E]?: 0 | 1 | 'text';
 }, options?: any): (constructor: any) => void;
 export interface CascadeOptions {
     create?: boolean;
