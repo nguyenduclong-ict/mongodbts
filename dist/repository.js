@@ -449,7 +449,7 @@ class Repository {
             }
             const [docs, count] = yield Promise.all([
                 queryBuilder.exec(),
-                this.model.find().merge(queryBuilder).countDocuments(),
+                this.model.find(ctx.query).countDocuments(),
             ]);
             return {
                 data: docs,

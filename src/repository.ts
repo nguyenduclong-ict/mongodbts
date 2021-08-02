@@ -640,7 +640,7 @@ export class Repository<E = any> {
 
     const [docs, count] = await Promise.all([
       queryBuilder.exec(),
-      this.model.find().merge(queryBuilder).countDocuments(),
+      this.model.find(ctx.query).countDocuments(),
     ])
 
     return {
