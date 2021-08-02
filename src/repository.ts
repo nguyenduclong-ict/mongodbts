@@ -1,7 +1,7 @@
 import { plainToClass } from 'class-transformer'
 import { validate } from 'class-validator'
 import EventEmmit from 'events'
-import { omit, set, unset } from 'lodash'
+import { omit, set, uniq, unset } from 'lodash'
 import {
   AnyObject,
   Connection,
@@ -112,6 +112,13 @@ export function repository(
             this.$after[key].push(...handlers)
           }
         })
+        // unique hooks
+        Object.keys(this.$before).forEach((key) => {
+          this.$before[key] = uniq(this.$before[key])
+        })
+        Object.keys(this.$after).forEach((key) => {
+          this.$after[key] = uniq(this.$after[key])
+        })
 
         this.schema = this.schema || schema || createSchema(this.entityCls)
         if (this.onCreateSchema) this.onCreateSchema(this.schema)
@@ -181,7 +188,7 @@ export function Before(...actions: any[]) {
 
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
-      value[action].push(propertyKey)
+      if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
 
     Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
@@ -195,7 +202,7 @@ export function After(...actions: any[]) {
 
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
-      value[action].push(propertyKey)
+      if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
 
     Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)

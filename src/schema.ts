@@ -202,14 +202,14 @@ export function createSchema<E = any>(EC: any): Schema<E> {
   if (options.timestamps) {
     if (!rawDefinition.createdAt) {
       rawDefinition.createdAt = {
-        type: Date,
+        type: getType(Date),
         auto: true,
       }
     }
 
     if (!rawDefinition.updatedAt) {
       rawDefinition.updatedAt = {
-        type: Date,
+        type: getType(Date),
         auto: true,
       }
     }

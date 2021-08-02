@@ -140,13 +140,13 @@ function createSchema(EC) {
     if (options.timestamps) {
         if (!rawDefinition.createdAt) {
             rawDefinition.createdAt = {
-                type: Date,
+                type: getType(Date),
                 auto: true,
             };
         }
         if (!rawDefinition.updatedAt) {
             rawDefinition.updatedAt = {
-                type: Date,
+                type: getType(Date),
                 auto: true,
             };
         }

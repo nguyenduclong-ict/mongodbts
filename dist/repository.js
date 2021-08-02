@@ -108,6 +108,13 @@ function repository(EntityClass, connection, schema) {
                         this.$after[key].push(...handlers);
                     }
                 });
+                // unique hooks
+                Object.keys(this.$before).forEach((key) => {
+                    this.$before[key] = lodash_1.uniq(this.$before[key]);
+                });
+                Object.keys(this.$after).forEach((key) => {
+                    this.$after[key] = lodash_1.uniq(this.$after[key]);
+                });
                 this.schema = this.schema || schema || schema_1.createSchema(this.entityCls);
                 if (this.onCreateSchema)
                     this.onCreateSchema(this.schema);
@@ -169,7 +176,8 @@ function Before(...actions) {
         actions.forEach((action) => {
             if (!value[action])
                 value[action] = [];
-            value[action].push(propertyKey);
+            if (!value[action].includes(propertyKey))
+                value[action].push(propertyKey);
         });
         Reflect.defineMetadata(constants_1.KEYS.REPOSITORY_BEFORE, value, target.constructor);
     };
@@ -181,7 +189,8 @@ function After(...actions) {
         actions.forEach((action) => {
             if (!value[action])
                 value[action] = [];
-            value[action].push(propertyKey);
+            if (!value[action].includes(propertyKey))
+                value[action].push(propertyKey);
         });
         Reflect.defineMetadata(constants_1.KEYS.REPOSITORY_AFTER, value, target.constructor);
     };
