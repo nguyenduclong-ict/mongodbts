@@ -263,7 +263,7 @@ export interface Context<M = {}> {
 export interface ContextOptions<E> {
   project?: { [K in keyof E]: 0 | 1 } & { [x: string]: 0 | 1 }
   fields?: (keyof E | (string & {}))[]
-  sort?: { [K in keyof E]: 0 | 1 } & { [x: string]: 0 | 1 }
+  sort?: { [K in keyof E]?: 0 | 1 } & { [x: string]: -1 | 1 }
   populates?: (keyof E | (string & {}) | PopulateOptions)[]
   limit?: number
   skip?: number

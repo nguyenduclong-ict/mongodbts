@@ -78,9 +78,9 @@ export interface ContextOptions<E> {
     };
     fields?: (keyof E | (string & {}))[];
     sort?: {
-        [K in keyof E]: 0 | 1;
+        [K in keyof E]?: 0 | 1;
     } & {
-        [x: string]: 0 | 1;
+        [x: string]: -1 | 1;
     };
     populates?: (keyof E | (string & {}) | PopulateOptions)[];
     limit?: number;
