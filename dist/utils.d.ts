@@ -10,7 +10,7 @@ export declare function createMongoConnection(uri: string, options?: ConnectOpti
     ready: Promise<unknown>;
 };
 export declare function omitBy<T extends object>(value: T, omitCheck: ((k: string, v: any) => boolean) | any[] | number | string | object): Partial<T>;
-export declare function getHooks(key: any, target: any): {
+export declare function getHooks(key: 'before' | 'after', target: any): {
     [x: string]: any[];
 };
 export declare function getActions(target: any): string[];

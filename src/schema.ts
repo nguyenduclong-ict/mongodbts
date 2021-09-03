@@ -10,14 +10,10 @@ import {
   Min,
   MinLength,
 } from 'class-validator'
-import { omit, unset } from 'lodash'
-import {
-  IndexOptions,
-  Schema,
-  SchemaDefinitionProperty,
-  SchemaOptions,
-} from 'mongoose'
+import { unset } from 'lodash'
+import { Schema, SchemaDefinitionProperty, SchemaOptions } from 'mongoose'
 import { KEYS } from './constants'
+import { hooks } from './meta'
 import { IsObjectId, IsRequired } from './validate'
 
 export interface MongoSchemaOptions extends SchemaOptions {
@@ -183,10 +179,13 @@ export function Cascade(
   }
 ) {
   return function (target: any, propertyKey: string) {
-    const value =
-      Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target.constructor) || {}
+    // const value =
+    //   Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target.constructor) || {}
+    // value[propertyKey] = options
+    // Reflect.defineMetadata(KEYS.SCHEMA_CASCADE, value, target.constructor)
+    const value = hooks.cascade.get(target.constructor) || {}
     value[propertyKey] = options
-    Reflect.defineMetadata(KEYS.SCHEMA_CASCADE, value, target.constructor)
+    hooks.cascade.set(target.constructor, value)
   }
 }
 // decorators ====>

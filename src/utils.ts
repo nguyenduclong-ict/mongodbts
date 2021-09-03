@@ -5,6 +5,7 @@ import { KEYS } from './constants'
 import get from 'lodash/get'
 import set from 'lodash/set'
 import pick from 'lodash/pick'
+import { hooks } from './meta'
 
 export { get, set, pick }
 
@@ -53,7 +54,7 @@ export function omitBy<T extends object>(
   return result
 }
 
-export function getHooks(key: any, target: any) {
+export function getHooks(key: 'before' | 'after', target: any) {
   const result: { [x: string]: any[] } = {}
   const proto = Object.getPrototypeOf(target)
 
@@ -65,7 +66,7 @@ export function getHooks(key: any, target: any) {
     })
   }
 
-  const data = Reflect.getOwnMetadata(key, target)
+  const data = hooks[key].get(target)
 
   if (data) {
     Object.keys(data).forEach((k) => {
@@ -95,11 +96,12 @@ export function getCascades(target: any) {
   const proto = Object.getPrototypeOf(target)
 
   if (proto && proto !== Object.getPrototypeOf(Function)) {
-    const parent = getHooks(KEYS.SCHEMA_CASCADE, proto)
+    const parent = getCascades(proto)
     Object.assign(result, parent)
   }
 
-  const data = Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target)
+  const data = hooks.cascade.get(target)
+  // const data = Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target)
 
   if (data) {
     Object.assign(result, data)

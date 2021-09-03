@@ -18,3 +18,4 @@ __exportStar(require("./utils"), exports);
 __exportStar(require("./constants"), exports);
 __exportStar(require("./validate"), exports);
 __exportStar(require("./types"), exports);
+__exportStar(require("./meta"), exports);

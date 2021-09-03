@@ -26,6 +26,7 @@ const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 const events_1 = __importDefault(require("events"));
 const lodash_1 = require("lodash");
+const meta_1 = require("./meta");
 const mongoose_1 = require("mongoose");
 const constants_1 = require("./constants");
 const schema_1 = require("./schema");
@@ -40,8 +41,10 @@ function repository(EntityClass, connection, schema) {
                 this.name = EntityClass.name;
                 const actions = utils_1.getActions(constructor);
                 const cascade = utils_1.getCascades(EntityClass);
-                const before = utils_1.getHooks(constants_1.KEYS.REPOSITORY_BEFORE, constructor);
-                const after = utils_1.getHooks(constants_1.KEYS.REPOSITORY_AFTER, constructor);
+                // const before = getHooks(KEYS.REPOSITORY_BEFORE, constructor)
+                // const after = getHooks(KEYS.REPOSITORY_AFTER, constructor)
+                const before = utils_1.getHooks('before', constructor);
+                const after = utils_1.getHooks('after', constructor);
                 this.$before = this.$before || {};
                 this.$after = this.$after || {};
                 Object.keys(Repository.global.before).forEach((key) => {
@@ -172,27 +175,33 @@ function repository(EntityClass, connection, schema) {
 exports.repository = repository;
 function Before(...actions) {
     return function (target, propertyKey) {
-        const value = Reflect.getOwnMetadata(constants_1.KEYS.REPOSITORY_BEFORE, target.constructor) || {};
+        // const value =
+        //   Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
+        const value = meta_1.hooks.before.get(target.constructor) || {};
         actions.forEach((action) => {
             if (!value[action])
                 value[action] = [];
             if (!value[action].includes(propertyKey))
                 value[action].push(propertyKey);
         });
-        Reflect.defineMetadata(constants_1.KEYS.REPOSITORY_BEFORE, value, target.constructor);
+        meta_1.hooks.before.set(target.constructor, value);
+        // Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
     };
 }
 exports.Before = Before;
 function After(...actions) {
     return function (target, propertyKey) {
-        const value = Reflect.getOwnMetadata(constants_1.KEYS.REPOSITORY_AFTER, target.constructor) || {};
+        // const value =
+        //   Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
+        const value = meta_1.hooks.after.get(target.constructor) || {};
         actions.forEach((action) => {
             if (!value[action])
                 value[action] = [];
             if (!value[action].includes(propertyKey))
                 value[action].push(propertyKey);
         });
-        Reflect.defineMetadata(constants_1.KEYS.REPOSITORY_AFTER, value, target.constructor);
+        meta_1.hooks.after.set(target.constructor, value);
+        // Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)
     };
 }
 exports.After = After;

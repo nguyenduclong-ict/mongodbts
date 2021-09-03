@@ -13,6 +13,7 @@ const set_1 = __importDefault(require("lodash/set"));
 exports.set = set_1.default;
 const pick_1 = __importDefault(require("lodash/pick"));
 exports.pick = pick_1.default;
+const meta_1 = require("./meta");
 function createMongoConnection(uri, options) {
     const connection = mongoose_1.createConnection(uri || 'mongodb://localhost:27017', Object.assign({ useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true, useFindAndModify: false, autoIndex: true }, options));
     const ready = new Promise((resolve) => {
@@ -53,7 +54,7 @@ function getHooks(key, target) {
                 result[k] = parent[k];
         });
     }
-    const data = Reflect.getOwnMetadata(key, target);
+    const data = meta_1.hooks[key].get(target);
     if (data) {
         Object.keys(data).forEach((k) => {
             if (result[k])
@@ -80,10 +81,11 @@ function getCascades(target) {
     const result = {};
     const proto = Object.getPrototypeOf(target);
     if (proto && proto !== Object.getPrototypeOf(Function)) {
-        const parent = getHooks(constants_1.KEYS.SCHEMA_CASCADE, proto);
+        const parent = getCascades(proto);
         Object.assign(result, parent);
     }
-    const data = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_CASCADE, target);
+    const data = meta_1.hooks.cascade.get(target);
+    // const data = Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target)
     if (data) {
         Object.assign(result, data);
     }

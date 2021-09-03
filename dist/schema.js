@@ -5,6 +5,7 @@ const class_validator_1 = require("class-validator");
 const lodash_1 = require("lodash");
 const mongoose_1 = require("mongoose");
 const constants_1 = require("./constants");
+const meta_1 = require("./meta");
 const validate_1 = require("./validate");
 // <==== decorators
 function Entity(options = {}) {
@@ -124,9 +125,13 @@ function Cascade(options = {
     onDelete: 'none',
 }) {
     return function (target, propertyKey) {
-        const value = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_CASCADE, target.constructor) || {};
+        // const value =
+        //   Reflect.getOwnMetadata(KEYS.SCHEMA_CASCADE, target.constructor) || {}
+        // value[propertyKey] = options
+        // Reflect.defineMetadata(KEYS.SCHEMA_CASCADE, value, target.constructor)
+        const value = meta_1.hooks.cascade.get(target.constructor) || {};
         value[propertyKey] = options;
-        Reflect.defineMetadata(constants_1.KEYS.SCHEMA_CASCADE, value, target.constructor);
+        meta_1.hooks.cascade.set(target.constructor, value);
     };
 }
 exports.Cascade = Cascade;

@@ -2,6 +2,7 @@ import { plainToClass } from 'class-transformer'
 import { validate } from 'class-validator'
 import EventEmmit from 'events'
 import { omit, set, uniq, unset } from 'lodash'
+import { hooks } from './meta'
 import {
   AnyObject,
   Connection,
@@ -43,8 +44,11 @@ export function repository(
         this.name = EntityClass.name
         const actions: string[] = getActions(constructor)
         const cascade = getCascades(EntityClass)
-        const before = getHooks(KEYS.REPOSITORY_BEFORE, constructor)
-        const after = getHooks(KEYS.REPOSITORY_AFTER, constructor)
+        // const before = getHooks(KEYS.REPOSITORY_BEFORE, constructor)
+        // const after = getHooks(KEYS.REPOSITORY_AFTER, constructor)
+
+        const before = getHooks('before', constructor)
+        const after = getHooks('after', constructor)
 
         this.$before = this.$before || {}
         this.$after = this.$after || {}
@@ -183,29 +187,35 @@ export function repository(
 
 export function Before(...actions: any[]) {
   return function (target: Repository, propertyKey: string) {
-    const value =
-      Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
+    // const value =
+    //   Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
+
+    const value = hooks.before.get(target.constructor) || {}
 
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
       if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
 
-    Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
+    hooks.before.set(target.constructor, value)
+
+    // Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
   }
 }
 
 export function After(...actions: any[]) {
   return function (target: Repository, propertyKey: string) {
-    const value =
-      Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
+    // const value =
+    //   Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
+    const value = hooks.after.get(target.constructor) || {}
 
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
       if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
 
-    Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)
+    hooks.after.set(target.constructor, value)
+    // Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)
   }
 }
 
