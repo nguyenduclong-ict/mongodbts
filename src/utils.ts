@@ -62,7 +62,7 @@ export function getHooks(key: 'before' | 'after', target: any) {
     const parent = getHooks(key, proto)
     Object.keys(parent).forEach((k) => {
       if (result[k]) result[k].push(...parent[k])
-      else result[k] = parent[k]
+      else result[k] = [...parent[k]]
     })
   }
 

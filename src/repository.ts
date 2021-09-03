@@ -187,35 +187,23 @@ export function repository(
 
 export function Before(...actions: any[]) {
   return function (target: Repository, propertyKey: string) {
-    // const value =
-    //   Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
-
     const value = hooks.before.get(target.constructor) || {}
-
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
       if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
-
     hooks.before.set(target.constructor, value)
-
-    // Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
   }
 }
 
 export function After(...actions: any[]) {
   return function (target: Repository, propertyKey: string) {
-    // const value =
-    //   Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
     const value = hooks.after.get(target.constructor) || {}
-
     actions.forEach((action) => {
       if (!value[action]) value[action] = []
       if (!value[action].includes(propertyKey)) value[action].push(propertyKey)
     })
-
     hooks.after.set(target.constructor, value)
-    // Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)
   }
 }
 

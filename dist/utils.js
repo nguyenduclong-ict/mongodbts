@@ -51,7 +51,7 @@ function getHooks(key, target) {
             if (result[k])
                 result[k].push(...parent[k]);
             else
-                result[k] = parent[k];
+                result[k] = [...parent[k]];
         });
     }
     const data = meta_1.hooks[key].get(target);

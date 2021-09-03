@@ -175,8 +175,6 @@ function repository(EntityClass, connection, schema) {
 exports.repository = repository;
 function Before(...actions) {
     return function (target, propertyKey) {
-        // const value =
-        //   Reflect.getOwnMetadata(KEYS.REPOSITORY_BEFORE, target.constructor) || {}
         const value = meta_1.hooks.before.get(target.constructor) || {};
         actions.forEach((action) => {
             if (!value[action])
@@ -185,14 +183,11 @@ function Before(...actions) {
                 value[action].push(propertyKey);
         });
         meta_1.hooks.before.set(target.constructor, value);
-        // Reflect.defineMetadata(KEYS.REPOSITORY_BEFORE, value, target.constructor)
     };
 }
 exports.Before = Before;
 function After(...actions) {
     return function (target, propertyKey) {
-        // const value =
-        //   Reflect.getOwnMetadata(KEYS.REPOSITORY_AFTER, target.constructor) || {}
         const value = meta_1.hooks.after.get(target.constructor) || {};
         actions.forEach((action) => {
             if (!value[action])
@@ -201,7 +196,6 @@ function After(...actions) {
                 value[action].push(propertyKey);
         });
         meta_1.hooks.after.set(target.constructor, value);
-        // Reflect.defineMetadata(KEYS.REPOSITORY_AFTER, value, target.constructor)
     };
 }
 exports.After = After;
