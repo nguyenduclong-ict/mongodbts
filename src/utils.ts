@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { ConnectOptions, createConnection } from 'mongoose'
-import { CascadeOptions } from 'schema'
+import { CascadeOptions } from './schema'
 import { KEYS } from './constants'
 import get from 'lodash/get'
 import set from 'lodash/set'
