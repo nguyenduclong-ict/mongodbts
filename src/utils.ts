@@ -117,7 +117,7 @@ export const toMongoId = (value: any) => {
   if (typeof value === 'string') return value
   if (typeof value === 'object') {
     if (value.constructor.name === 'ObjectID') return value.toHexString()
-    return value._id || value.id
+    return String(value._id || value.id)
   }
 }
 
