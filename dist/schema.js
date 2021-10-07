@@ -99,7 +99,7 @@ function Field(field) {
         const fieldDefine = getBaseDefine(field);
         addValidate(fieldDefine, target, propertyKey);
         const definition = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_DEFINITION, target.constructor) || {};
-        definition[propertyKey] = getBaseDefine(fieldDefine);
+        definition[propertyKey] = fieldDefine;
         Reflect.defineMetadata(constants_1.KEYS.SCHEMA_DEFINITION, definition, target.constructor);
         // add raw defind for get object description of entity
         const raw = Reflect.getOwnMetadata(constants_1.KEYS.SCHEMA_RAW, target.constructor) || {};
@@ -156,6 +156,14 @@ function createSchema(EC) {
             };
         }
     }
+    // @ts-ignore
+    // const schemaDf: any = {}
+    // Object.keys(definition).forEach((key) => {
+    //   const fieldDefine = definition[key]
+    //   const { __raw, ...fd } = fieldDefine
+    //   schemaDf[key] = __raw || fd
+    // })
+    console.log(definition);
     const schema = new mongoose_1.Schema(definition, options);
     indexes.forEach(({ fields, options: opts }) => {
         schema.index(fields, opts);

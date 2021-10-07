@@ -363,6 +363,7 @@ export class Rollback {
       try {
         this.results.push(await action())
       } catch (error) {
+        // @ts-ignore
         this.errorIndex = error
         this.error = error
         throw error
@@ -561,7 +562,7 @@ export class Repository<E = any> {
     const queryBuilder = this.model.findOne(
       ctx.query,
       project,
-      this.getBaseOptionFromContext(ctx, ['fields'])
+      this.getBaseOptionFromContext(ctx, ['fields', 'sort'])
     )
 
     if (ctx.populates) {
@@ -569,6 +570,8 @@ export class Repository<E = any> {
         queryBuilder.populate(item)
       }
     }
+
+    if (ctx.sort) queryBuilder.sort(ctx.sort)
 
     return queryBuilder.exec()
   }
@@ -580,21 +583,17 @@ export class Repository<E = any> {
     const queryBuilder = this.model.find(
       ctx.query,
       project,
-      this.getBaseOptionFromContext(
-        {
-          ...ctx,
-          limit: ctx.limit,
-          skip: ctx.skip,
-          sort: ctx.sort,
-        },
-        ['fields']
-      )
+      this.getBaseOptionFromContext(ctx, ['fields', 'sort'])
     )
 
     if (ctx.populates) {
       for (const item of ctx.populates) {
         queryBuilder.populate(item)
       }
+    }
+
+    if (ctx.sort) {
+      queryBuilder.sort(ctx.sort)
     }
 
     return queryBuilder.exec()
@@ -619,21 +618,17 @@ export class Repository<E = any> {
     const queryBuilder = this.model.find(
       ctx.query,
       project,
-      this.getBaseOptionFromContext(
-        {
-          ...ctx,
-          limit,
-          skip,
-          sort: ctx.sort,
-        },
-        ['fields']
-      )
+      this.getBaseOptionFromContext(ctx, ['fields', 'sort'])
     )
 
     if (ctx.populates) {
       for (const item of ctx.populates) {
         queryBuilder.populate(item)
       }
+    }
+
+    if (ctx.sort) {
+      queryBuilder.sort(ctx.sort)
     }
 
     const [docs, count] = await Promise.all([

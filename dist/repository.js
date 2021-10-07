@@ -262,6 +262,7 @@ class Rollback {
                     this.results.push(yield action());
                 }
                 catch (error) {
+                    // @ts-ignore
                     this.errorIndex = error;
                     this.error = error;
                     throw error;
@@ -412,21 +413,26 @@ class Repository {
     // Repository base actions
     findOne(ctx = {}) {
         const project = this.getQueryProject(ctx.project || ctx.fields);
-        const queryBuilder = this.model.findOne(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields']));
+        const queryBuilder = this.model.findOne(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields', 'sort']));
         if (ctx.populates) {
             for (const item of ctx.populates) {
                 queryBuilder.populate(item);
             }
         }
+        if (ctx.sort)
+            queryBuilder.sort(ctx.sort);
         return queryBuilder.exec();
     }
     find(ctx = {}) {
         const project = this.getQueryProject(ctx.project || ctx.fields);
-        const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(Object.assign(Object.assign({}, ctx), { limit: ctx.limit, skip: ctx.skip, sort: ctx.sort }), ['fields']));
+        const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields', 'sort']));
         if (ctx.populates) {
             for (const item of ctx.populates) {
                 queryBuilder.populate(item);
             }
+        }
+        if (ctx.sort) {
+            queryBuilder.sort(ctx.sort);
         }
         return queryBuilder.exec();
     }
@@ -443,12 +449,14 @@ class Repository {
                 : Number.isInteger(ctx.skip)
                     ? ctx.skip
                     : 0;
-            const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(Object.assign(Object.assign({}, ctx), { limit,
-                skip, sort: ctx.sort }), ['fields']));
+            const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields', 'sort']));
             if (ctx.populates) {
                 for (const item of ctx.populates) {
                     queryBuilder.populate(item);
                 }
+            }
+            if (ctx.sort) {
+                queryBuilder.sort(ctx.sort);
             }
             const [docs, count] = yield Promise.all([
                 queryBuilder.exec(),

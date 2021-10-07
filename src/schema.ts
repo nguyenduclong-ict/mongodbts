@@ -121,7 +121,7 @@ export function Field(field: FieldType): PropertyDecorator {
 
     const definition =
       Reflect.getOwnMetadata(KEYS.SCHEMA_DEFINITION, target.constructor) || {}
-    definition[propertyKey] = getBaseDefine(fieldDefine)
+    definition[propertyKey] = fieldDefine
     Reflect.defineMetadata(
       KEYS.SCHEMA_DEFINITION,
       definition,
@@ -213,6 +213,16 @@ export function createSchema<E = any>(EC: any): Schema<E> {
       }
     }
   }
+
+  // @ts-ignore
+  // const schemaDf: any = {}
+  // Object.keys(definition).forEach((key) => {
+  //   const fieldDefine = definition[key]
+  //   const { __raw, ...fd } = fieldDefine
+  //   schemaDf[key] = __raw || fd
+  // })
+
+  console.log(definition)
 
   const schema = new Schema<E>(definition, options)
 
