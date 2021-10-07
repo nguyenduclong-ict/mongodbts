@@ -615,6 +615,9 @@ export class Repository<E = any> {
       ? ctx.skip
       : 0
 
+    ctx.limit = limit
+    ctx.skip = skip
+
     const queryBuilder = this.model.find(
       ctx.query,
       project,

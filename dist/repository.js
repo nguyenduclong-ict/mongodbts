@@ -449,6 +449,8 @@ class Repository {
                 : Number.isInteger(ctx.skip)
                     ? ctx.skip
                     : 0;
+            ctx.limit = limit;
+            ctx.skip = skip;
             const queryBuilder = this.model.find(ctx.query, project, this.getBaseOptionFromContext(ctx, ['fields', 'sort']));
             if (ctx.populates) {
                 for (const item of ctx.populates) {
