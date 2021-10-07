@@ -163,7 +163,6 @@ function createSchema(EC) {
     //   const { __raw, ...fd } = fieldDefine
     //   schemaDf[key] = __raw || fd
     // })
-    console.log(definition);
     const schema = new mongoose_1.Schema(definition, options);
     indexes.forEach(({ fields, options: opts }) => {
         schema.index(fields, opts);

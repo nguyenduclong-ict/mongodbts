@@ -222,8 +222,6 @@ export function createSchema<E = any>(EC: any): Schema<E> {
   //   schemaDf[key] = __raw || fd
   // })
 
-  console.log(definition)
-
   const schema = new Schema<E>(definition, options)
 
   indexes.forEach(({ fields, options: opts }) => {
