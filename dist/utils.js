@@ -96,15 +96,15 @@ exports.getCascades = getCascades;
 // mongoid
 // -------
 const toMongoId = (value) => {
-    let result;
-    if (value instanceof mongodb_1.ObjectId || value instanceof mongodb_1.ObjectID)
-        return result;
     if (!value)
-        result = null;
+        return null;
+    let result;
+    if (value instanceof mongodb_1.ObjectId)
+        return result;
     else if (typeof value === 'string')
         result = value;
     else if (typeof value === 'object')
-        result = value._id || value.id;
+        result = value._id || value.id || value;
     return result ? new mongodb_1.ObjectId(result) : null;
 };
 exports.toMongoId = toMongoId;
