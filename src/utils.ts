@@ -113,13 +113,13 @@ export function getCascades(target: any) {
 
 // mongoid
 // -------
-export const toMongoId = (value: any) => {
+export const toMongoId = <T = ObjectId>(value: any): T => {
   let result
   if (value instanceof ObjectId || value instanceof ObjectID) return result
   if (!value) result = null
   else if (typeof value === 'string') result = value
   else if (typeof value === 'object') result = value._id || value.id
-  return new ObjectId(result)
+  return result ? (new ObjectId(result) as any) : null
 }
 
 export const idIsEqual = (val1: any, val2: any) =>

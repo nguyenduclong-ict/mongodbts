@@ -18,5 +18,5 @@ export declare function getActions(target: any): string[];
 export declare function getCascades(target: any): {
     [x: string]: CascadeOptions;
 };
-export declare const toMongoId: (value: any) => ObjectId;
+export declare const toMongoId: <T = ObjectId>(value: any) => T;
 export declare const idIsEqual: (val1: any, val2: any) => boolean;
