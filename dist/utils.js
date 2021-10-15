@@ -14,6 +14,7 @@ exports.set = set_1.default;
 const pick_1 = __importDefault(require("lodash/pick"));
 exports.pick = pick_1.default;
 const meta_1 = require("./meta");
+const mongodb_1 = require("mongodb");
 function createMongoConnection(uri, options) {
     const connection = mongoose_1.createConnection(uri || 'mongodb://localhost:27017', Object.assign({ useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true, useFindAndModify: false, autoIndex: true }, options));
     const ready = new Promise((resolve) => {
@@ -95,16 +96,17 @@ exports.getCascades = getCascades;
 // mongoid
 // -------
 const toMongoId = (value) => {
+    let result;
+    if (value instanceof mongodb_1.ObjectId || value instanceof mongodb_1.ObjectID)
+        return result;
     if (!value)
-        return null;
-    if (typeof value === 'string')
-        return value;
-    if (typeof value === 'object') {
-        if (value.constructor.name === 'ObjectID')
-            return value.toHexString();
-        return String(value._id || value.id);
-    }
+        result = null;
+    else if (typeof value === 'string')
+        result = value;
+    else if (typeof value === 'object')
+        result = value._id || value.id;
+    return new mongodb_1.ObjectId(result);
 };
 exports.toMongoId = toMongoId;
-const idIsEqual = (val1, val2) => exports.toMongoId(val1) === exports.toMongoId(val2);
+const idIsEqual = (val1, val2) => exports.toMongoId(val1).equals(exports.toMongoId(val2));
 exports.idIsEqual = idIsEqual;

@@ -6,6 +6,7 @@ import get from 'lodash/get'
 import set from 'lodash/set'
 import pick from 'lodash/pick'
 import { hooks } from './meta'
+import { ObjectId, ObjectID } from 'mongodb'
 
 export { get, set, pick }
 
@@ -113,13 +114,13 @@ export function getCascades(target: any) {
 // mongoid
 // -------
 export const toMongoId = (value: any) => {
-  if (!value) return null
-  if (typeof value === 'string') return value
-  if (typeof value === 'object') {
-    if (value.constructor.name === 'ObjectID') return value.toHexString()
-    return String(value._id || value.id)
-  }
+  let result
+  if (value instanceof ObjectId || value instanceof ObjectID) return result
+  if (!value) result = null
+  else if (typeof value === 'string') result = value
+  else if (typeof value === 'object') result = value._id || value.id
+  return new ObjectId(result)
 }
 
 export const idIsEqual = (val1: any, val2: any) =>
-  toMongoId(val1) === toMongoId(val2)
+  toMongoId(val1).equals(toMongoId(val2))

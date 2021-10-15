@@ -4,6 +4,7 @@ import { CascadeOptions } from './schema';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import pick from 'lodash/pick';
+import { ObjectId } from 'mongodb';
 export { get, set, pick };
 export declare function createMongoConnection(uri: string, options?: ConnectOptions): {
     connection: import("mongoose").Connection & Promise<import("mongoose").Connection>;
@@ -17,5 +18,5 @@ export declare function getActions(target: any): string[];
 export declare function getCascades(target: any): {
     [x: string]: CascadeOptions;
 };
-export declare const toMongoId: (value: any) => any;
+export declare const toMongoId: (value: any) => ObjectId;
 export declare const idIsEqual: (val1: any, val2: any) => boolean;
