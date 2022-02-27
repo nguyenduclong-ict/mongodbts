@@ -1,6 +1,6 @@
 {
   "name": "@nguyenduclong/mongodbts",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Mongodb repository with decorator in typescript",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
