@@ -105,7 +105,12 @@ const toMongoId = (value) => {
         result = value;
     else if (typeof value === 'object')
         result = value._id || value.id || value;
-    return result ? new mongodb_1.ObjectId(result) : null;
+    try {
+        return result ? new mongodb_1.ObjectId(result) : null;
+    }
+    catch (error) {
+        return result;
+    }
 };
 exports.toMongoId = toMongoId;
 const idIsEqual = (val1, val2) => exports.toMongoId(val1).equals(exports.toMongoId(val2));
