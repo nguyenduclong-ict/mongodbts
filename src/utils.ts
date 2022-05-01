@@ -126,5 +126,11 @@ export const toMongoId = <T = ObjectId>(value: any): T => {
   }
 }
 
-export const idIsEqual = (val1: any, val2: any) =>
-  toMongoId(val1).equals(toMongoId(val2))
+export const idIsEqual = (val1: any, val2: any) => {
+  if ((!val1 && !val2) || (!val1 && val2) || (val1 && !val2)) return true
+  try {
+    return toMongoId(val1)?.equals(toMongoId(val2))
+  } catch (error) {
+    return false
+  }
+}

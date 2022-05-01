@@ -113,5 +113,15 @@ const toMongoId = (value) => {
     }
 };
 exports.toMongoId = toMongoId;
-const idIsEqual = (val1, val2) => exports.toMongoId(val1).equals(exports.toMongoId(val2));
+const idIsEqual = (val1, val2) => {
+    var _a;
+    if ((!val1 && !val2) || (!val1 && val2) || (val1 && !val2))
+        return true;
+    try {
+        return (_a = exports.toMongoId(val1)) === null || _a === void 0 ? void 0 : _a.equals(exports.toMongoId(val2));
+    }
+    catch (error) {
+        return false;
+    }
+};
 exports.idIsEqual = idIsEqual;
